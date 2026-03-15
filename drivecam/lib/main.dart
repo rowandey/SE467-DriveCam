@@ -1,6 +1,7 @@
 import 'package:camera/camera.dart';
 import 'package:drivecam/screens/home_page.dart';
 import 'package:drivecam/widgets/bottom_app_bar.dart';
+import 'package:drivecam/provider/settings_provider.dart';
 import 'package:drivecam/provider/theme_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -16,9 +17,19 @@ void main() async {
   final cameras = await availableCameras();
   final firstCamera = cameras.first;
 
+  final themeProvider = ThemeProvider();
+  final settingsProvider = SettingsProvider();
+  await Future.wait([
+    themeProvider.loadDarkModePrefs(),
+    settingsProvider.loadPrefs(),
+  ]);
+
   runApp(
     MultiProvider(
-      providers: [ChangeNotifierProvider(create: (context) => ThemeProvider())],
+      providers: [
+        ChangeNotifierProvider.value(value: themeProvider),
+        ChangeNotifierProvider.value(value: settingsProvider),
+      ],
       child: MainApp(camera: firstCamera),
     ),
   );
@@ -30,11 +41,12 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = context.watch<ThemeProvider>();
+    final themeMode = context.select<ThemeProvider, ThemeMode>((p) => p.themeMode);
+    final themeProvider = context.read<ThemeProvider>();
     return MaterialApp(
       theme: ThemeData(colorScheme: themeProvider.lightColorScheme),
       darkTheme: ThemeData(colorScheme: themeProvider.darkColorScheme),
-      themeMode: themeProvider.themeMode,
+      themeMode: themeMode,
       home: Scaffold(
         body: HomePage(camera: camera),
         bottomNavigationBar: const MyBottomNavBar(),

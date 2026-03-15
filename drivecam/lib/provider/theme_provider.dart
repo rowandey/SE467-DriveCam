@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ThemeProvider extends ChangeNotifier {
-  // use system theme for light/dark
+  // start with using the system theme for light/dark, but user can change later
   ThemeMode themeMode = ThemeMode.system;
 
   bool recordingOn = false;
@@ -21,6 +21,7 @@ class ThemeProvider extends ChangeNotifier {
     onSurface: Colors.black,
   );
 
+  // TODO: fix dark mode
   ColorScheme darkColorScheme = const ColorScheme(
     brightness: Brightness.dark,
     primary: Color(0xFF0072AC),
@@ -29,7 +30,7 @@ class ThemeProvider extends ChangeNotifier {
     onSecondary: Colors.white,
     error: Colors.red,
     onError: Colors.white,
-    surface: Color(0xFF121212),
+    surface: Color(0x33333333), // TODO: make dark mode less, uh, dark (surface value doesn't seem to actually get used)
     onSurface: Colors.white,
   );
 
@@ -39,7 +40,7 @@ class ThemeProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void loadDarkModePrefs() async {
+  Future<void> loadDarkModePrefs() async {
     // load in saved preferences
     final prefs = SharedPreferencesAsync();
     bool? mode = await prefs.getBool("darkMode");
