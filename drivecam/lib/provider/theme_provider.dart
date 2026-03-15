@@ -5,9 +5,7 @@ class ThemeProvider extends ChangeNotifier {
   // start with using the system theme for light/dark, but user can change later
   ThemeMode themeMode = ThemeMode.system;
 
-  bool recordingOn = false;
-
-  Color recordButtonColor = const Color(0xFF646464);
+  
 
   ColorScheme lightColorScheme = const ColorScheme(
     brightness: Brightness.light,
@@ -32,12 +30,6 @@ class ThemeProvider extends ChangeNotifier {
     surface: Color(0x33333333), // TODO: make dark mode less, uh, dark (surface value doesn't seem to actually get used)
     onSurface: Colors.white,
   );
-
-  void toggleRecordingButtonColor() {
-    recordingOn = !recordingOn;
-    recordButtonColor = recordingOn ? const Color(0xFFFF0000) : const Color(0xFF646464);
-    notifyListeners();
-  }
 
   Future<void> loadDarkModePrefs() async {
     // load in saved preferences

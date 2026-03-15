@@ -1,6 +1,7 @@
 import 'package:camera/camera.dart';
 import 'package:drivecam/screens/home_page.dart';
 import 'package:drivecam/widgets/bottom_app_bar.dart';
+import 'package:drivecam/provider/recording_provider.dart';
 import 'package:drivecam/provider/settings_provider.dart';
 import 'package:drivecam/provider/theme_provider.dart';
 import 'package:flutter/material.dart';
@@ -32,6 +33,7 @@ void main() async {
       providers: [
         ChangeNotifierProvider.value(value: themeProvider),
         ChangeNotifierProvider.value(value: settingsProvider),
+        ChangeNotifierProvider(create: (_) => RecordingProvider()),
       ],
       child: MainApp(camera: firstCamera),
     ),
