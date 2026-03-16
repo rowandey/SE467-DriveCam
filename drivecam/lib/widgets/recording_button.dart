@@ -21,7 +21,7 @@ class RecordingButton extends StatelessWidget {
         height: 50,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: recordingProvider.recordingOn
+          color: recordingProvider.isRecording
               ? const Color(0xFFFF0000)
               : const Color(0xFF646464),
         ),

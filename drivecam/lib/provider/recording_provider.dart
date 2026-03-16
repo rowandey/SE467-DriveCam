@@ -1,15 +1,23 @@
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
 class RecordingProvider extends ChangeNotifier {
-  bool recordingOn = false;
+  bool isRecording = false;
+  CameraController? _controller;
 
   void toggleRecording() {
-    recordingOn = !recordingOn;
+    isRecording = !isRecording;
     notifyListeners();
-    if (recordingOn) {
-      // TODO: start recording
+    if (isRecording) {
+      
     } else {
       // TODO: stop recording
     }
+  }
+
+
+
+  void setCameraController(CameraController controller) {
+    _controller = controller;
   }
 }

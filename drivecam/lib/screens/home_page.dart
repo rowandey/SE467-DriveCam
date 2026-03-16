@@ -1,6 +1,6 @@
 import 'package:camera/camera.dart';
 import 'package:drivecam/provider/theme_provider.dart';
-import 'package:drivecam/widgets/camera_preview.dart';
+import 'package:drivecam/widgets/camera_view.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 

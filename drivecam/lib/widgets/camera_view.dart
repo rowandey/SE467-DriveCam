@@ -1,5 +1,7 @@
 import 'package:camera/camera.dart';
+import 'package:drivecam/provider/recording_provider.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 class CameraView extends StatefulWidget {
   final CameraDescription camera;
@@ -17,7 +19,12 @@ class _CameraViewState extends State<CameraView> {
   void initState() {
     super.initState();
     _controller = CameraController(widget.camera, ResolutionPreset.medium);
-    _initializeControllerFuture = _controller.initialize();
+
+    // this passes a pointer of the camera controller, NOT a copy, so no state duplication is happening
+    final provider = context.read<RecordingProvider>();
+    _initializeControllerFuture = _controller.initialize().then((_) {
+      provider.setCameraController(_controller);
+    });
   }
 
   @override
