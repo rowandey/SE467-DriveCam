@@ -1,4 +1,5 @@
 import 'package:camera/camera.dart';
+import 'package:drivecam/database/database_helper.dart';
 import 'package:drivecam/screens/home_page.dart';
 import 'package:drivecam/widgets/bottom_app_bar.dart';
 import 'package:drivecam/provider/recording_provider.dart';
@@ -30,6 +31,7 @@ void main() async {
   await Future.wait([
     themeProvider.loadDarkModePrefs(),
     settingsProvider.loadPrefs(),
+    DatabaseHelper().database, // init the db
   ]);
 
   runApp(
