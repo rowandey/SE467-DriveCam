@@ -10,9 +10,13 @@ import 'package:provider/provider.dart';
 // general todos
 // TODO1: Disable camera if a seperate screen is navigated to and a recording is NOT active
 // TODO2 - DONE: Force use of a specific color, rather than the general hue
-// TODO3: Set up SQL structure
+// TODO3 - DONE: Set up SQL structure
 // TODO4: Fix dark mode
 // TODO5: Make clip screen
+// TODO6: Setup recording capability
+// TODO7: Be able to take a clip on the fly
+// TODO8: Be able to make a clip from the main recording
+// TODO9: Be able to edit a clip (should probably use the same system that TODO8 uses)
 
 
 void main() async {
