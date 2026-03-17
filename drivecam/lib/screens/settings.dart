@@ -1,7 +1,7 @@
 import 'package:drivecam/provider/settings_provider.dart';
 import 'package:drivecam/provider/theme_provider.dart';
-import 'package:drivecam/widgets/app_bar.dart';
-import 'package:drivecam/widgets/bottom_app_bar.dart';
+import 'package:drivecam/widgets/app_bars/app_bar.dart';
+import 'package:drivecam/widgets/app_bars/bottom_app_bar.dart';
 import 'package:drivecam/widgets/setting_dropdown.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';

@@ -1,5 +1,5 @@
-import 'package:drivecam/widgets/app_bar.dart';
-import 'package:drivecam/widgets/bottom_app_bar.dart';
+import 'package:drivecam/widgets/app_bars/app_bar.dart';
+import 'package:drivecam/widgets/app_bars/bottom_app_bar.dart';
 import 'package:flutter/material.dart';
 
 class OnboardingScreen extends StatelessWidget {

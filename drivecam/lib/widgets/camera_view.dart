@@ -65,13 +65,15 @@ class _CameraViewState extends State<CameraView> {
       future: _initializeControllerFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.done) {
-          return SizedBox.expand(
-            child: FittedBox(
-              fit: BoxFit.cover,
-              child: SizedBox(
-                width: _controller.value.previewSize?.height ?? 1,
-                height: _controller.value.previewSize?.width ?? 1,
-                child: CameraPreview(_controller),
+          return InkWell(
+            child: SizedBox.expand(
+              child: FittedBox(
+                fit: BoxFit.cover,
+                child: SizedBox(
+                  width: _controller.value.previewSize?.height ?? 1,
+                  height: _controller.value.previewSize?.width ?? 1,
+                  child: CameraPreview(_controller),
+                ),
               ),
             ),
           );

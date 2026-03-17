@@ -1,4 +1,4 @@
-import 'package:drivecam/screens/all_footage_display.dart';
+import 'package:drivecam/screens/footage/all_footage_display.dart';
 import 'package:drivecam/screens/settings.dart';
 import 'package:drivecam/widgets/recording_button.dart';
 import 'package:flutter/material.dart';
