@@ -8,7 +8,7 @@ class SettingsProvider extends ChangeNotifier {
   static const List<String> qualityOptions = ['480p', '720p', '1080p', '4K'];
   static const List<String> footageLimitOptions = ['30min', '1h', '1.5h', '2h', '3h', '4h', '5h', '6h'];
   static const List<String> storageLimitOptions = ['1GB', '2GB', '4GB', '8GB', '12GB', '16GB', '32GB', '64GB'];
-  static const List<String> clipDurationOptions = ['30s', '1m', '2m', '3m', '5m'];
+  static const List<String> clipDurationOptions = ['5s', '1m', '2m', '3m', '5m'];
   static const List<String> clipStorageLimitOptions = ['1GB', '2GB', '4GB', '6GB', '8GB'];
 
   // Mappings
@@ -28,6 +28,18 @@ class SettingsProvider extends ChangeNotifier {
       case '30 fps': return 30;
       case '60 fps': return 60;
       default: return 30;
+    }
+  }
+
+  static int clipDurationToSeconds(String value) {
+    switch (value) {
+      case '5s':  return 5;
+      case '30s': return 30;
+      case '1m':  return 60;
+      case '2m':  return 120;
+      case '3m':  return 180;
+      case '5m':  return 300;
+      default:    return 120;
     }
   }
 

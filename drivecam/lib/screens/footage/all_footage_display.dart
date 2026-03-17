@@ -1,3 +1,4 @@
+import 'package:drivecam/screens/footage/clip_display.dart';
 import 'package:drivecam/screens/footage/footage_viewer.dart';
 import 'package:drivecam/screens/footage/recording_display.dart';
 import 'package:drivecam/widgets/app_bars/app_bar.dart';
@@ -11,18 +12,28 @@ class AllFootageDisplay extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: const MyAppBar(title: 'Clip Manager'),
-      body: Column(
-        children: [
-          const Center(child: Text('Clips')),
-          const Center(child: Text('Recording')),
-          InkWell(
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const FootageViewer()),
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(12, 12, 12, 4),
+              child: Text('Clips', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             ),
-            child: const RecordingDisplay(),
-          ),
-        ],
+            const ClipDisplay(),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(12, 12, 12, 4),
+              child: Text('Recording', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+            InkWell(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const FootageViewer()),
+              ),
+              child: const RecordingDisplay(),
+            ),
+          ],
+        ),
       ),
       bottomNavigationBar: const MyBottomNavBar(activePage: NavPage.footage),
     );

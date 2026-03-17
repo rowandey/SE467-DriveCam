@@ -5,7 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
 class FootageViewer extends StatefulWidget {
-  const FootageViewer({super.key});
+  /// If provided, plays this file directly. Otherwise loads the latest recording from DB.
+  final String? filePath;
+  final String title;
+
+  const FootageViewer({super.key, this.filePath, this.title = 'Recording'});
 
   @override
   State<FootageViewer> createState() => _FootageViewerState();
@@ -19,26 +23,30 @@ class _FootageViewerState extends State<FootageViewer> {
   @override
   void initState() {
     super.initState();
-    _loadRecording();
+    _loadVideo();
   }
 
-  Future<void> _loadRecording() async {
-    final recording = await Recording.openRecordingDB();
-    if (!mounted) return;
+  Future<void> _loadVideo() async {
+    String? path = widget.filePath;
 
-    if (recording == null) {
-      setState(() {
-        _loading = false;
-        _error = 'No recording found.';
-      });
-      return;
+    if (path == null) {
+      final recording = await Recording.openRecordingDB();
+      if (!mounted) return;
+      if (recording == null) {
+        setState(() {
+          _loading = false;
+          _error = 'No recording found.';
+        });
+        return;
+      }
+      path = recording.recordingLocation;
     }
 
-    final file = File(recording.recordingLocation);
+    final file = File(path);
     if (!file.existsSync()) {
       setState(() {
         _loading = false;
-        _error = 'Recording file not found.';
+        _error = 'Video file not found.';
       });
       return;
     }
@@ -76,7 +84,7 @@ class _FootageViewerState extends State<FootageViewer> {
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
-        title: const Text('Recording'),
+        title: Text(widget.title),
       ),
       body: Center(child: _buildBody()),
     );

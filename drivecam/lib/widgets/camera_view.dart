@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:camera/camera.dart';
 import 'package:drivecam/provider/recording_provider.dart';
 import 'package:drivecam/provider/settings_provider.dart';
@@ -17,6 +19,7 @@ class _CameraViewState extends State<CameraView> {
   CameraDescription? _camera;
   String? _currentQuality;
   String? _currentFramerate;
+  Timer? _clipTimer;
 
   Future<void> _initCamera(String quality, String framerate) async {
     _camera ??= (await availableCameras()).first;
@@ -33,6 +36,38 @@ class _CameraViewState extends State<CameraView> {
     _currentFramerate = framerate;
   }
 
+  Future<void> _triggerClipSave() async {
+    print("hi");
+    final recordingProvider = context.read<RecordingProvider>();
+    final settingsProvider = context.read<SettingsProvider>();
+
+    final secondsPre = SettingsProvider.clipDurationToSeconds(
+      settingsProvider.preDurationLength,
+    );
+    final secondsPost = SettingsProvider.clipDurationToSeconds(
+      settingsProvider.postDurationLength,
+    );
+    final seconds = secondsPre + secondsPost;
+
+    if (secondsPost == 0) {
+      recordingProvider.saveClipFromLive(
+        clipDurationSeconds: seconds,
+        secondsPre: secondsPre,
+      );
+    } else {
+      _clipTimer?.cancel();
+      // Clip is only actually taken and saved once post second counter expires.
+      // Unfortunately, the technology to look into the future doesn't exist yet.
+      _clipTimer = Timer(Duration(seconds: secondsPost), () {
+        print("ping");
+        recordingProvider.saveClipFromLive(
+          clipDurationSeconds: seconds,
+          secondsPre: secondsPre,
+        );
+      });
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -43,10 +78,11 @@ class _CameraViewState extends State<CameraView> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final settings = context.watch<SettingsProvider>();
-    final quality = settings.quality;
-    final framerate = settings.framerate;
-    if (_currentQuality != null && (quality != _currentQuality || framerate != _currentFramerate)) {
+    final settingsProvider = context.watch<SettingsProvider>();
+    final quality = settingsProvider.quality;
+    final framerate = settingsProvider.framerate;
+    if (_currentQuality != null &&
+        (quality != _currentQuality || framerate != _currentFramerate)) {
       _controller?.dispose();
       setState(() {
         _controller = null;
@@ -57,6 +93,7 @@ class _CameraViewState extends State<CameraView> {
 
   @override
   void dispose() {
+    _clipTimer?.cancel();
     _controller?.dispose();
     super.dispose();
   }
@@ -66,14 +103,20 @@ class _CameraViewState extends State<CameraView> {
     return FutureBuilder<void>(
       future: _initFuture,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.done && _controller != null) {
-          return SizedBox.expand(
-            child: FittedBox(
-              fit: BoxFit.cover,
-              child: SizedBox(
-                width: _controller!.value.previewSize?.height ?? 1,
-                height: _controller!.value.previewSize?.width ?? 1,
-                child: CameraPreview(_controller!),
+        if (snapshot.connectionState == ConnectionState.done &&
+            _controller != null) {
+          return InkWell(
+            onTap: () {
+              _triggerClipSave();
+            },
+            child: SizedBox.expand(
+              child: FittedBox(
+                fit: BoxFit.cover,
+                child: SizedBox(
+                  width: _controller!.value.previewSize?.height ?? 1,
+                  height: _controller!.value.previewSize?.width ?? 1,
+                  child: CameraPreview(_controller!),
+                ),
               ),
             ),
           );

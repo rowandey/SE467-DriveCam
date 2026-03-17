@@ -7,6 +7,8 @@ class ThemeProvider extends ChangeNotifier {
 
   
 
+  final Color clipSavedColor = const Color(0xFF4CAF50);
+
   ColorScheme lightColorScheme = const ColorScheme(
     brightness: Brightness.light,
     primary: Color(0xFF4AB9E7),
@@ -27,7 +29,7 @@ class ThemeProvider extends ChangeNotifier {
     onSecondary: Colors.white,
     error: Colors.red,
     onError: Colors.white,
-    surface: Color(0x33333333), // TODO: make dark mode less, uh, dark (surface value doesn't seem to actually get used)
+    surface: Color(0x33333333), // TODO: Make dark mode less, uh, dark (surface value doesn't seem to actually get used)
     onSurface: Colors.white,
   );
 
