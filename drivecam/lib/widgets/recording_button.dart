@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 class RecordingButton extends StatelessWidget {
-  const RecordingButton({super.key});
+  final VoidCallback? onPressed;
+  const RecordingButton({super.key, this.onPressed});
 
   @override
   Widget build(BuildContext context) {
@@ -15,7 +16,7 @@ class RecordingButton extends StatelessWidget {
         fixedSize: const Size(72, 72),
         padding: EdgeInsets.zero,
       ),
-      onPressed: recordingProvider.toggleRecording,
+      onPressed: onPressed ?? recordingProvider.toggleRecording,
       child: Container(
         width: 50,
         height: 50,
