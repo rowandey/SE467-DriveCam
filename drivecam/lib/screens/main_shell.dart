@@ -2,8 +2,8 @@ import 'package:drivecam/provider/settings_provider.dart';
 import 'package:drivecam/screens/home_page.dart';
 import 'package:drivecam/screens/onboarding/onboarding.dart';
 import 'package:drivecam/widgets/app_bars/bottom_app_bar.dart';
-import 'package:drivecam/widgets/clip_saved_notification.dart';
-import 'package:drivecam/widgets/recording_indicator.dart';
+import 'package:drivecam/widgets/notifications_and_indicators/clip_saved_notification.dart';
+import 'package:drivecam/widgets/notifications_and_indicators/recording_indicator.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 

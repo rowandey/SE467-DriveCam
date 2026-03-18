@@ -1,6 +1,6 @@
 import 'package:drivecam/provider/settings_provider.dart';
 import 'package:drivecam/provider/theme_provider.dart';
-import 'package:drivecam/widgets/setting_dropdown.dart';
+import 'package:drivecam/widgets/settings/setting_dropdown.dart';
 import 'package:flutter/material.dart';
 
 class SettingsList extends StatelessWidget {
