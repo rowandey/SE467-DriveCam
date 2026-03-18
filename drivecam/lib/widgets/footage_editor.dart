@@ -157,6 +157,9 @@ class _FootageEditorState extends State<FootageEditor> {
         final duration = value.duration;
         final position = value.position;
 
+        final isLandscape =
+            MediaQuery.of(context).orientation == Orientation.landscape;
+
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -187,130 +190,257 @@ class _FootageEditorState extends State<FootageEditor> {
               ),
             ),
 
-            // Position / duration timestamps
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    _formatDuration(position),
+            // Position / duration timestamps + controls row
+            // In landscape, merge timestamps and buttons into one row to
+            // minimise vertical space.
+            if (isLandscape)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      _formatDuration(position),
+                      style: TextStyle(
+                        color: colorScheme.onSurface,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      onPressed: _seekBackward,
+                      icon: Icon(Icons.replay_10,
+                          color: colorScheme.onSurface),
+                      iconSize: 24,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                    IconButton(
+                      onPressed: _setClipStart,
+                      icon: Icon(
+                        Icons.first_page,
+                        color: _clipStart != null
+                            ? colorScheme.primary
+                            : colorScheme.onSurface,
+                      ),
+                      iconSize: 24,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                    const SizedBox(width: 4),
+                    IconButton(
+                      onPressed: _togglePlayback,
+                      icon: Icon(
+                        value.isPlaying
+                            ? Icons.pause_circle_filled
+                            : Icons.play_circle_filled,
+                        color: colorScheme.primary,
+                      ),
+                      iconSize: 36,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                    const SizedBox(width: 4),
+                    IconButton(
+                      onPressed: _setClipEnd,
+                      icon: Icon(
+                        Icons.last_page,
+                        color: _clipEnd != null
+                            ? colorScheme.primary
+                            : colorScheme.onSurface,
+                      ),
+                      iconSize: 24,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                    IconButton(
+                      onPressed: _seekForward,
+                      icon: Icon(Icons.forward_10,
+                          color: colorScheme.onSurface),
+                      iconSize: 24,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      _formatDuration(duration),
+                      style: TextStyle(
+                        color: colorScheme.onSurface,
+                        fontSize: 12,
+                      ),
+                    ),
+                    if (_clipStart != null || _clipEnd != null) ...[
+                      const SizedBox(width: 12),
+                      Text(
+                        'Clip: ${_formatDuration(_clipStart ?? Duration.zero)} → ${_formatDuration(_clipEnd ?? duration)}',
+                        style: TextStyle(
+                          color: colorScheme.primary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                    const Spacer(),
+                    GestureDetector(
+                      onTap: _saving ? null : _saveClip,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: _saving
+                              ? colorScheme.primary.withAlpha(128)
+                              : colorScheme.primary,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: _saving
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text(
+                                'Save Clip',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else ...[
+              // Portrait: keep the existing multi-row layout
+              // Position / duration timestamps
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      _formatDuration(position),
+                      style: TextStyle(
+                        color: colorScheme.onSurface,
+                        fontSize: 12,
+                      ),
+                    ),
+                    Text(
+                      _formatDuration(duration),
+                      style: TextStyle(
+                        color: colorScheme.onSurface,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Clip range indicator
+              if (_clipStart != null || _clipEnd != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    'Clip: ${_formatDuration(_clipStart ?? Duration.zero)} → ${_formatDuration(_clipEnd ?? duration)}',
                     style: TextStyle(
-                      color: colorScheme.onSurface,
-                      fontSize: 12,
+                      color: colorScheme.primary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                  Text(
-                    _formatDuration(duration),
-                    style: TextStyle(
-                      color: colorScheme.onSurface,
-                      fontSize: 12,
+                ),
+
+              const SizedBox(height: 16),
+
+              // Control buttons
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton(
+                    onPressed: _seekBackward,
+                    icon: Icon(Icons.replay_10,
+                        color: colorScheme.onSurface),
+                    iconSize: 32,
+                  ),
+                  IconButton(
+                    onPressed: _setClipStart,
+                    icon: Icon(
+                      Icons.first_page,
+                      color: _clipStart != null
+                          ? colorScheme.primary
+                          : colorScheme.onSurface,
                     ),
+                    iconSize: 32,
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    onPressed: _togglePlayback,
+                    icon: Icon(
+                      value.isPlaying
+                          ? Icons.pause_circle_filled
+                          : Icons.play_circle_filled,
+                      color: colorScheme.primary,
+                    ),
+                    iconSize: 52,
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    onPressed: _setClipEnd,
+                    icon: Icon(
+                      Icons.last_page,
+                      color: _clipEnd != null
+                          ? colorScheme.primary
+                          : colorScheme.onSurface,
+                    ),
+                    iconSize: 32,
+                  ),
+                  IconButton(
+                    onPressed: _seekForward,
+                    icon: Icon(Icons.forward_10,
+                        color: colorScheme.onSurface),
+                    iconSize: 32,
                   ),
                 ],
               ),
-            ),
 
-            // Clip range indicator
-            if (_clipStart != null || _clipEnd != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  'Clip: ${_formatDuration(_clipStart ?? Duration.zero)} → ${_formatDuration(_clipEnd ?? duration)}',
-                  style: TextStyle(
-                    color: colorScheme.primary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
+              const SizedBox(height: 16),
+
+              // Save clip button (pill shape)
+              GestureDetector(
+                onTap: _saving ? null : _saveClip,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: _saving
+                        ? colorScheme.primary.withAlpha(128)
+                        : colorScheme.primary,
+                    borderRadius: BorderRadius.circular(24),
                   ),
+                  child: _saving
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Text(
+                          'Save Clip',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                 ),
               ),
-
-            const SizedBox(height: 16),
-
-            // Control buttons
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                IconButton(
-                  onPressed: _seekBackward,
-                  icon: Icon(Icons.replay_10,
-                      color: colorScheme.onSurface),
-                  iconSize: 32,
-                ),
-                IconButton(
-                  onPressed: _setClipStart,
-                  icon: Icon(
-                    Icons.first_page,
-                    color: _clipStart != null
-                        ? colorScheme.primary
-                        : colorScheme.onSurface,
-                  ),
-                  iconSize: 32,
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  onPressed: _togglePlayback,
-                  icon: Icon(
-                    value.isPlaying
-                        ? Icons.pause_circle_filled
-                        : Icons.play_circle_filled,
-                    color: colorScheme.primary,
-                  ),
-                  iconSize: 52,
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  onPressed: _setClipEnd,
-                  icon: Icon(
-                    Icons.last_page,
-                    color: _clipEnd != null
-                        ? colorScheme.primary
-                        : colorScheme.onSurface,
-                  ),
-                  iconSize: 32,
-                ),
-                IconButton(
-                  onPressed: _seekForward,
-                  icon: Icon(Icons.forward_10,
-                      color: colorScheme.onSurface),
-                  iconSize: 32,
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 16),
-
-            // Save clip button (pill shape)
-            GestureDetector(
-              onTap: _saving ? null : _saveClip,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                decoration: BoxDecoration(
-                  color: _saving
-                      ? colorScheme.primary.withAlpha(128)
-                      : colorScheme.primary,
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: _saving
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
-                      )
-                    : const Text(
-                        'Save Clip',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-              ),
-            ),
+            ],
           ],
         );
       },

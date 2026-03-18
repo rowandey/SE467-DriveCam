@@ -100,6 +100,53 @@ class _FootageViewerState extends State<FootageViewer> {
     }
 
     final controller = _controller!;
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
+
+    if (isLandscape) {
+      // In landscape, overlay the editor controls on top of the video so the
+      // footage fills the screen and controls float at the bottom.
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          Center(
+            child: AspectRatio(
+              aspectRatio: controller.value.aspectRatio,
+              child: VideoPlayer(controller),
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: DecoratedBox(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.transparent, Colors.black87],
+                ),
+              ),
+              child: Theme(
+                data: Theme.of(context).copyWith(
+                  colorScheme: colorScheme.copyWith(
+                    onSurface: Colors.white,
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 12, bottom: 20),
+                  child: FootageEditor(
+                    controller: controller,
+                    filePath: _filePath!,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
     return Column(
       children: [
         Expanded(

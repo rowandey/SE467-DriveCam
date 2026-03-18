@@ -19,6 +19,7 @@ class _CameraViewState extends State<CameraView> {
   CameraDescription? _camera;
   String? _currentQuality;
   String? _currentFramerate;
+  Orientation? _currentOrientation;
   Timer? _clipTimer;
 
   Future<void> _initCamera(String quality, String framerate) async {
@@ -80,8 +81,19 @@ class _CameraViewState extends State<CameraView> {
     final settingsProvider = context.watch<SettingsProvider>();
     final quality = settingsProvider.quality;
     final framerate = settingsProvider.framerate;
-    if (_currentQuality != null &&
-        (quality != _currentQuality || framerate != _currentFramerate)) {
+    final orientation = MediaQuery.of(context).orientation;
+
+    final settingsChanged = _currentQuality != null &&
+        (quality != _currentQuality || framerate != _currentFramerate);
+    final orientationChanged =
+        _currentOrientation != null && orientation != _currentOrientation;
+    _currentOrientation = orientation;
+
+    // Reinitialize the camera when settings change, or when the device is
+    // rotated while not recording.
+    if (settingsChanged ||
+        (orientationChanged &&
+            !context.read<RecordingProvider>().isRecording)) {
       _controller?.dispose();
       setState(() {
         _controller = null;
@@ -99,11 +111,25 @@ class _CameraViewState extends State<CameraView> {
 
   @override
   Widget build(BuildContext context) {
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
+
     return FutureBuilder<void>(
       future: _initFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.done &&
             _controller != null) {
+          final previewSize = _controller!.value.previewSize;
+          // previewSize is in sensor coordinates (landscape: width > height).
+          // In portrait we swap to match the rotated display; in landscape the
+          // sensor and screen orientations align so we use them directly.
+          final width = isLandscape
+              ? (previewSize?.width ?? 1)
+              : (previewSize?.height ?? 1);
+          final height = isLandscape
+              ? (previewSize?.height ?? 1)
+              : (previewSize?.width ?? 1);
+
           return InkWell(
             onTap: () {
               _triggerClipSave();
@@ -112,8 +138,8 @@ class _CameraViewState extends State<CameraView> {
               child: FittedBox(
                 fit: BoxFit.cover,
                 child: SizedBox(
-                  width: _controller!.value.previewSize?.height ?? 1,
-                  height: _controller!.value.previewSize?.width ?? 1,
+                  width: width,
+                  height: height,
                   child: CameraPreview(_controller!),
                 ),
               ),
