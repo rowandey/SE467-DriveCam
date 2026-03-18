@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:drivecam/models/recording.dart';
+import 'package:drivecam/widgets/footage_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
@@ -17,6 +18,7 @@ class FootageViewer extends StatefulWidget {
 
 class _FootageViewerState extends State<FootageViewer> {
   VideoPlayerController? _controller;
+  String? _filePath;
   bool _loading = true;
   String? _error;
 
@@ -60,6 +62,7 @@ class _FootageViewerState extends State<FootageViewer> {
 
     setState(() {
       _controller = controller;
+      _filePath = path;
       _loading = false;
     });
   }
@@ -70,72 +73,49 @@ class _FootageViewerState extends State<FootageViewer> {
     super.dispose();
   }
 
-  void _togglePlayback() {
-    final c = _controller!;
-    setState(() {
-      c.value.isPlaying ? c.pause() : c.play();
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
-      backgroundColor: Colors.black,
       appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
+        backgroundColor: colorScheme.primary,
+        foregroundColor: colorScheme.onPrimary,
         title: Text(widget.title),
       ),
-      body: Center(child: _buildBody()),
+      body: _buildBody(colorScheme),
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody(ColorScheme colorScheme) {
     if (_loading) {
-      return const CircularProgressIndicator(color: Colors.white);
+      return Center(
+        child: CircularProgressIndicator(color: colorScheme.primary),
+      );
     }
     if (_error != null) {
-      return Text(_error!, style: const TextStyle(color: Colors.white));
+      return Center(
+        child: Text(_error!, style: TextStyle(color: colorScheme.onSurface)),
+      );
     }
 
     final controller = _controller!;
-    return GestureDetector(
-      onTap: _togglePlayback,
-      child: AspectRatio(
-        aspectRatio: controller.value.aspectRatio,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            VideoPlayer(controller),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: VideoProgressIndicator(
-                controller,
-                allowScrubbing: true,
-                colors: const VideoProgressColors(
-                  playedColor: Colors.white,
-                  bufferedColor: Colors.white38,
-                  backgroundColor: Colors.white12,
-                ),
-              ),
+    return Column(
+      children: [
+        Expanded(
+          child: Center(
+            child: AspectRatio(
+              aspectRatio: controller.value.aspectRatio,
+              child: VideoPlayer(controller),
             ),
-            ValueListenableBuilder<VideoPlayerValue>(
-              valueListenable: controller,
-              builder: (context, value, child) => AnimatedOpacity(
-                opacity: value.isPlaying ? 0.0 : 1.0,
-                duration: const Duration(milliseconds: 200),
-                child: const Icon(
-                  Icons.play_arrow,
-                  color: Colors.white,
-                  size: 72,
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
-      ),
+        FootageEditor(
+          controller: controller,
+          filePath: _filePath!,
+        ),
+        const SizedBox(height: 16),
+      ],
     );
   }
 }
