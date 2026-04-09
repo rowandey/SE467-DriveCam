@@ -26,6 +26,12 @@ class ClipProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Mark that a clip was saved and notify listeners.
+  void markClipSaved() {
+    clipSaved = true;
+    notifyListeners();
+  }
+
   void startClipProgress(int postDurationSeconds) {
     clipInProgress = true;
     clipSaved = false;
@@ -134,8 +140,9 @@ class ClipProvider extends ChangeNotifier {
     final thumbnailPath = '${thumbnailsDir.path}/$id.jpg';
     final now = DateTime.now();
 
+    // Re-encode clip to H.264/AAC for maximum compatibility with platform players.
     await FFmpegKit.execute(
-      '-y -i ${xFile.path} -ss $startSecs -t $actualDuration -c copy $clipPath',
+      '-y -i ${xFile.path} -ss $startSecs -t $actualDuration -c:v libx264 -preset veryfast -crf 23 -c:a aac -b:a 128k $clipPath',
     );
 
     // Keep xFile around — it is added to segments so it can be concatenated
@@ -185,8 +192,9 @@ class ClipProvider extends ChangeNotifier {
     final thumbnailPath = '${thumbnailsDir.path}/$id.jpg';
     final now = DateTime.now();
 
+    // Re-encode clip to H.264/AAC for maximum compatibility with platform players.
     await FFmpegKit.execute(
-      '-y -i ${recording.recordingLocation} -ss $startSeconds -t $duration -c copy $clipPath',
+      '-y -i ${recording.recordingLocation} -ss $startSeconds -t $duration -c:v libx264 -preset veryfast -crf 23 -c:a aac -b:a 128k $clipPath',
     );
 
     if (!await File(clipPath).exists()) return;

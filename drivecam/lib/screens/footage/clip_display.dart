@@ -3,6 +3,8 @@ import 'package:drivecam/models/clip.dart';
 import 'package:drivecam/screens/footage/footage_viewer.dart';
 import 'package:drivecam/widgets/delete_button.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../provider/clip_provider.dart';
 
 class ClipDisplay extends StatefulWidget {
   const ClipDisplay({super.key});
@@ -46,9 +48,17 @@ class _ClipDisplayState extends State<ClipDisplay> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<Clip>>(
-      future: _clipsFuture,
-      builder: (context, snapshot) {
+    return Consumer<ClipProvider>(builder: (context, cp, child) {
+      if (cp.clipSaved) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _refresh();
+          cp.dismissClipNotification();
+        });
+      }
+
+      return FutureBuilder<List<Clip>>(
+        future: _clipsFuture,
+        builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const SizedBox(
             height: 200,
@@ -78,6 +88,7 @@ class _ClipDisplayState extends State<ClipDisplay> {
         );
       },
     );
+  });
   }
 }
 

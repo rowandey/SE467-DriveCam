@@ -4,6 +4,7 @@ import 'package:drivecam/models/recording.dart';
 import 'package:drivecam/widgets/footage_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
+import 'package:gal/gal.dart';
 
 class FootageViewer extends StatefulWidget {
   /// If provided, plays this file directly. Otherwise loads the latest recording from DB.
@@ -53,18 +54,29 @@ class _FootageViewerState extends State<FootageViewer> {
       return;
     }
 
-    final controller = VideoPlayerController.file(file);
-    await controller.initialize();
-    if (!mounted) {
-      controller.dispose();
-      return;
-    }
+    try {
+      final controller = VideoPlayerController.file(file);
+      await controller.initialize();
+      if (!mounted) {
+        controller.dispose();
+        return;
+      }
 
-    setState(() {
-      _controller = controller;
-      _filePath = path;
-      _loading = false;
-    });
+      setState(() {
+        _controller = controller;
+        _filePath = path;
+        _loading = false;
+      });
+    } catch (e, st) {
+      // Video initialization failed — surface a helpful error instead of
+      // letting the platform exception crash the UI.
+      debugPrint('Video init failed: $e\n$st');
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'Video playback error: $e';
+      });
+    }
   }
 
   @override
@@ -82,9 +94,50 @@ class _FootageViewerState extends State<FootageViewer> {
         backgroundColor: colorScheme.primary,
         foregroundColor: colorScheme.onPrimary,
         title: Text(widget.title),
+        actions: [
+          if (_filePath != null)
+              IconButton(
+                onPressed: () => _exportToGallery(context),
+                icon: const Icon(Icons.download),
+                tooltip: 'Export to gallery',
+              ),
+        ],
       ),
       body: _buildBody(colorScheme),
     );
+  }
+
+  Future<void> _exportToGallery(BuildContext context) async {
+    if (_filePath == null) return;
+    final colorScheme = Theme.of(context).colorScheme;
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Exporting to gallery...'), backgroundColor: colorScheme.primary),
+    );
+    try {
+      final hasAccess = await Gal.hasAccess();
+      if (!hasAccess) {
+        await Gal.requestAccess();
+        if (!await Gal.hasAccess()) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Gallery access denied')),
+          );
+          return;
+        }
+      }
+
+      await Gal.putVideo(_filePath!);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Saved to gallery')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Export failed: $e')),
+      );
+    }
   }
 
   Widget _buildBody(ColorScheme colorScheme) {

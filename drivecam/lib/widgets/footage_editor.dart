@@ -2,7 +2,10 @@ import 'dart:io';
 
 import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
 import 'package:flutter/material.dart';
-import 'package:gal/gal.dart';
+import 'package:intl/intl.dart';
+import '../models/clip.dart';
+import 'package:provider/provider.dart';
+import '../provider/clip_provider.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:video_player/video_player.dart';
@@ -83,30 +86,27 @@ class _FootageEditorState extends State<FootageEditor> {
     setState(() => _saving = true);
 
     try {
-      final hasAccess = await Gal.hasAccess();
-      if (!hasAccess) {
-        await Gal.requestAccess();
-        if (!await Gal.hasAccess()) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Gallery access denied')),
-            );
-          }
-          return;
-        }
-      }
-
+      // Create clip inside app storage and register in DB (do NOT export to
+      // the device gallery automatically).
       final appDir = await getApplicationDocumentsDirectory();
+      final clipsDir = Directory('${appDir.path}/clips');
+      final thumbnailsDir = Directory('${appDir.path}/thumbnails');
       final tempDir = Directory('${appDir.path}/temp');
-      await tempDir.create(recursive: true);
+      await Future.wait([
+        clipsDir.create(recursive: true),
+        thumbnailsDir.create(recursive: true),
+        tempDir.create(recursive: true),
+      ]);
 
       final id = const Uuid().v4();
-      final outputPath = '${tempDir.path}/$id.mp4';
+      final outputPath = '${clipsDir.path}/$id.mp4';
+      final thumbnailPath = '${thumbnailsDir.path}/$id.jpg';
       final startSecs = start.inMilliseconds / 1000.0;
       final durationSecs = (end - start).inMilliseconds / 1000.0;
 
+      // Re-encode clip to H.264/AAC to ensure platform player compatibility.
       await FFmpegKit.execute(
-        '-y -i ${widget.filePath} -ss $startSecs -t $durationSecs -c copy $outputPath',
+        '-y -i ${widget.filePath} -ss $startSecs -t $durationSecs -c:v libx264 -preset veryfast -crf 23 -c:a aac -b:a 128k $outputPath',
       );
 
       if (!await File(outputPath).exists()) {
@@ -118,15 +118,31 @@ class _FootageEditorState extends State<FootageEditor> {
         return;
       }
 
-      await Gal.putVideo(outputPath);
+      final fileSize = await File(outputPath).length();
+      await FFmpegKit.execute('-y -i $outputPath -vframes 1 -q:v 2 $thumbnailPath');
 
+      final now = DateTime.now();
+      await Clip(
+        id: id,
+        dateTime: now.toIso8601String(),
+        dateTimePretty: DateFormat('yyyy-MM-dd HH:mm').format(now),
+        clipLength: ((end - start).inMilliseconds / 1000).round(),
+        clipSize: fileSize,
+        triggerType: 'manual',
+        isFlagged: false,
+        clipLocation: outputPath,
+        thumbnailLocation: thumbnailPath,
+      ).insertClipDB();
+
+      // Notify ClipProvider so UI updates (clip list / notifications)
       try {
-        await File(outputPath).delete();
+        final cp = Provider.of<ClipProvider>(context, listen: false);
+        cp.markClipSaved();
       } catch (_) {}
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Clip saved to gallery')),
+          const SnackBar(content: Text('Clip saved to app')), 
         );
       }
     } catch (e) {
