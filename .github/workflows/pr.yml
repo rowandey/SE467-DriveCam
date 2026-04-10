@@ -19,6 +19,13 @@ jobs:
     name: Run Flutter Tests
     runs-on: ubuntu-latest
 
+    # Grant the GITHUB_TOKEN permission to post comments on PRs
+    # pull-requests: write allows the workflow to comment on pull requests
+    # contents: read allows the workflow to read repository contents
+    permissions:
+      pull-requests: write
+      contents: read
+
     # Use a single working directory so all Flutter commands target the project root.
     defaults:
       run:
