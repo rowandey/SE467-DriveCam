@@ -1,0 +1,89 @@
+# This workflow validates and ships the Flutter Android app from drivecam/.
+# Pushes to main run tests + build and upload APK as a workflow artifact.
+# Manual runs can also create a GitHub Release version after a successful build.
+name: DriveCam CI Release
+
+# Trigger on pushes to main, and allow maintainers to manually trigger release creation.
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release tag to create (example: v1.2.3)"
+        required: true
+        type: string
+
+# Default to read-only repo access; only the manual release job escalates permissions.
+permissions:
+  contents: read
+
+jobs:
+  build-test-artifact:
+    name: Test, Build APK, and Upload Artifact
+    runs-on: ubuntu-latest
+
+    # Use a single working directory so all Flutter commands target the project root.
+    defaults:
+      run:
+        working-directory: drivecam
+
+    steps:
+      # Fetch repository contents so the workflow can run tests/build commands.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Install Flutter SDK and enable built-in dependency caching for faster repeat runs.
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      # Resolve Dart/Flutter dependencies before running test and build commands.
+      - name: Install dependencies
+        run: flutter pub get
+
+      # Run the project's automated tests; build/release only proceeds if tests pass.
+      - name: Run Flutter tests
+        run: flutter test
+
+      # Build a release-mode APK artifact suitable for distribution/testing.
+      - name: Build release APK
+        run: flutter build apk --release
+
+      # Publish the APK as a workflow artifact instead of a GitHub Release asset.
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: drivecam-apk-${{ github.run_number }}
+          path: drivecam/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  release-manual:
+    name: Create Manual GitHub Release
+    if: github.event_name == 'workflow_dispatch'
+    needs: build-test-artifact
+    runs-on: ubuntu-latest
+
+    # Release creation needs write access to repository contents (tags/releases).
+    permissions:
+      contents: write
+
+    steps:
+      # Checkout is used so the release notes generator has local repository context.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Create a versioned GitHub Release without attaching binary assets.
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.version }}
+          name: DriveCam Release ${{ github.event.inputs.version }}
+          generate_release_notes: true
+          body: |
+            APK is uploaded as a workflow artifact for this run.
+            Download the artifact from the Actions run page (run #${{ github.run_number }}).
