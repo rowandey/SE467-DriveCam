@@ -12,13 +12,17 @@ on:
   pull_request:
     branches:
       - main
-      - develop
     types: [opened, synchronize, reopened]
 
 jobs:
   test:
     name: Run Flutter Tests
     runs-on: ubuntu-latest
+
+    # Use a single working directory so all Flutter commands target the project root.
+    defaults:
+      run:
+        working-directory: drivecam
 
     steps:
       # Check out the code from the PR
@@ -31,20 +35,16 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.0' # Update to match your target version
+          channel: stable
           cache: true
 
       # Change to drivecam directory since pubspec.yaml is in a subdirectory
       - name: Get dependencies
-        run: |
-          cd drivecam
-          flutter pub get
+        run: flutter pub get
 
       # Run Flutter tests
       - name: Run tests
-        run: |
-          cd drivecam
-          flutter test --machine > test-results.json || true
+        run: flutter test -r expanded > test-results.json || true
 
       # Upload test results as artifact (optional but useful)
       - name: Upload test results
@@ -54,27 +54,37 @@ jobs:
           name: test-results
           path: drivecam/test-results.json
 
-      # Post test results summary to PR
+          # Post test results summary to PR
       - name: Comment test results on PR
         if: always()
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
-            const testResults = fs.readFileSync('drivecam/test-results.json', 'utf8').split('\n');
+            const testResults = fs.readFileSync('drivecam/test-results.json', 'utf8');
             
+            // Parse the expanded format output for test counts
+            // Look for the final summary line with format: "+X -Y: ..."
+            const lines = testResults.split('\n');
             let passed = 0;
             let failed = 0;
             
-            testResults.forEach(line => {
-              if (line.includes('"test":') && line.includes('"result":"success"')) {
-                passed++;
-              } else if (line.includes('"test":') && line.includes('"result":"failure"')) {
-                failed++;
+            // Search for lines with the pattern "+N" and "-N" indicating test results
+            lines.forEach(line => {
+              const passMatch = line.match(/\+(\d+)/);
+              const failMatch = line.match(/\-(\d+)/);
+            
+              if (passMatch) {
+                passed = Math.max(passed, parseInt(passMatch[1]));
+              }
+              if (failMatch) {
+                failed = Math.max(failed, parseInt(failMatch[1]));
               }
             });
             
-            const summary = `## Test Results\n- ✅ Passed: ${passed}\n- ❌ Failed: ${failed}`;
+            // Determine status emoji based on results
+            const status = failed > 0 ? '❌' : '✅';
+            const summary = `${status} ## Test Results\n- ✅ Passed: ${passed}\n- ❌ Failed: ${failed}`;
             
             github.rest.issues.createComment({
               issue_number: context.issue.number,
