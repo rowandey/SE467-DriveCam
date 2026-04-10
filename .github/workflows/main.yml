@@ -1,5 +1,5 @@
 # This workflow validates and ships the Flutter Android app from drivecam/.
-# Pushes to main run tests + build and upload APK as a workflow artifact.
+# Pushes to main run lint checks, tests, build, and upload the APK as a workflow artifact.
 # Manual runs can also create a GitHub Release version after a successful build.
 name: DriveCam CI Release
 
@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   build-test-artifact:
-    name: Test, Build APK, and Upload Artifact
+    name: Analyze, Test, Build APK, and Upload Artifact
     runs-on: ubuntu-latest
 
     # Use a single working directory so all Flutter commands target the project root.
@@ -44,6 +44,10 @@ jobs:
       # Resolve Dart/Flutter dependencies before running test and build commands.
       - name: Install dependencies
         run: flutter pub get
+
+      # Run static analysis first so lint or type issues fail fast before tests/builds run.
+      - name: Analyze Flutter code
+        run: flutter analyze
 
       # Run the project's automated tests; build/release only proceeds if tests pass.
       - name: Run Flutter tests
