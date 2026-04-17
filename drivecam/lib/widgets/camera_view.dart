@@ -203,20 +203,37 @@ class _CameraViewState extends State<CameraView> {
               ? (previewSize?.height ?? 1)
               : (previewSize?.width ?? 1);
 
-          return InkWell(
-            onTap: () {
-              _triggerClipSave();
-            },
-            child: SizedBox.expand(
-              child: FittedBox(
-                fit: BoxFit.cover,
-                child: SizedBox(
-                  width: width,
-                  height: height,
-                  child: CameraPreview(_controller!),
+          // Stack provides layering so the menu button can overlay the camera preview.
+          // The menu button allows users to open the end drawer from the camera view.
+          return Stack(
+            children: [
+              InkWell(
+                onTap: () {
+                  _triggerClipSave();
+                },
+                child: SizedBox.expand(
+                  child: FittedBox(
+                    fit: BoxFit.cover,
+                    child: SizedBox(
+                      width: width,
+                      height: height,
+                      child: CameraPreview(_controller!),
+                    ),
+                  ),
                 ),
               ),
-            ),
+              // Menu button overlay positioned at top-right to access the navigation drawer.
+              Positioned(
+                top: 8,
+                right: 8,
+                child: IconButton(
+                  icon: const Icon(Icons.menu),
+                  color: Colors.white,
+                  iconSize: 28,
+                  onPressed: () => Scaffold.of(context).openEndDrawer(),
+                ),
+              ),
+            ],
           );
         }
         return const Center(child: CircularProgressIndicator());

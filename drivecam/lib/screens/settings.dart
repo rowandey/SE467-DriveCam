@@ -2,6 +2,7 @@ import 'package:drivecam/provider/settings_provider.dart';
 import 'package:drivecam/provider/theme_provider.dart';
 import 'package:drivecam/widgets/app_bars/app_bar.dart';
 import 'package:drivecam/widgets/app_bars/bottom_app_bar.dart';
+import 'package:drivecam/widgets/app_drawers/nav_drawer.dart';
 import 'package:drivecam/widgets/settings/settings_list.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -22,7 +23,9 @@ class SettingsScreen extends StatelessWidget {
     return Scaffold(
       appBar: const MyAppBar(title: 'Settings'),
       body: SettingsList(settingsProvider: settingsProvider, isDark: isDark, themeProvider: themeProvider),
-      bottomNavigationBar: const MyBottomNavBar(activePage: NavPage.settings),
+      bottomNavigationBar: const MyBottomNavBar(popOnRecord: true),
+      endDrawer: const NavDrawer(),
+      extendBody: true,
     );
   }
 }

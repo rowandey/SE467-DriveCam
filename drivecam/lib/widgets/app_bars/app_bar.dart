@@ -14,6 +14,10 @@ class MyAppBar extends StatelessWidget implements PreferredSizeWidget {
       backgroundColor: Theme.of(context).colorScheme.primary,
       title: Text(title),
       actions: [
+        IconButton(
+          icon: const Icon(Icons.menu),
+          onPressed: () => Scaffold.of(context).openEndDrawer(),
+        ),
       ],
     );
   }

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:drivecam/models/recording.dart';
+import 'package:drivecam/widgets/app_drawers/nav_drawer.dart';
 import 'package:drivecam/widgets/footage_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
@@ -101,9 +102,19 @@ class _FootageViewerState extends State<FootageViewer> {
                 icon: const Icon(Icons.download),
                 tooltip: 'Export to gallery',
               ),
+          // Builder provides a context that includes the Scaffold, allowing
+          // openEndDrawer() to find and open the drawer without errors.
+          Builder(
+            builder: (scaffoldContext) => IconButton(
+              icon: const Icon(Icons.menu),
+              onPressed: () => Scaffold.of(scaffoldContext).openEndDrawer(),
+            ),
+          ),
         ],
       ),
       body: _buildBody(colorScheme),
+      endDrawer: const NavDrawer(),
+      extendBody: true,
     );
   }
 

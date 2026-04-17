@@ -3,6 +3,7 @@ import 'package:drivecam/screens/footage/footage_viewer.dart';
 import 'package:drivecam/screens/footage/recording_display.dart';
 import 'package:drivecam/widgets/app_bars/app_bar.dart';
 import 'package:drivecam/widgets/app_bars/bottom_app_bar.dart';
+import 'package:drivecam/widgets/app_drawers/nav_drawer.dart';
 import 'package:flutter/material.dart';
 
 class AllFootageDisplay extends StatelessWidget {
@@ -47,7 +48,9 @@ class AllFootageDisplay extends StatelessWidget {
           ],
         ),
       ),
-      bottomNavigationBar: const MyBottomNavBar(activePage: NavPage.footage),
+      bottomNavigationBar: const MyBottomNavBar(popOnRecord: true),
+      endDrawer: const NavDrawer(),
+      extendBody: true,
     );
   }
 }
