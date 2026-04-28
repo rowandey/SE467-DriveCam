@@ -1,23 +1,48 @@
+// FootageEditor — playback scrubber + trim controls that sit below (or
+// overlay) the video in FootageViewer.
+//
+// After the HLS switch, trim boundaries snap to HLS segment starts, which
+// gives us two nice properties:
+//   - "Save Clip" can build a sub-manifest instead of transcoding with
+//     FFmpeg. It just selects a contiguous range of segments from the
+//     source manifest.
+//   - "Export to Gallery" (in FootageViewer) can remux the same segment
+//     range into a single MP4 via MediaMuxer, again without FFmpeg.
+//
+// The slider itself stays arbitrary-precision for smooth scrubbing; only
+// the trim boundaries snap. Segment boundaries are loaded from the
+// source manifest on init.
+
 import 'dart:io';
 
-import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import '../models/clip.dart';
 import 'package:provider/provider.dart';
-import '../provider/clip_provider.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:uuid/uuid.dart';
 import 'package:video_player/video_player.dart';
+
+import '../hls/hls_manifest.dart';
+import '../provider/clip_provider.dart';
+
+/// Notifies [FootageViewer] about the current trim range so it can feed
+/// the same range into Export to Gallery. Null bounds mean "use default"
+/// (0 for start, duration for end).
+typedef TrimRangeChanged = void Function(Duration? start, Duration? end);
 
 class FootageEditor extends StatefulWidget {
   final VideoPlayerController controller;
+
+  /// Path to the source manifest (.m3u8). Used both for snap math and for
+  /// the Save Clip sub-manifest.
   final String filePath;
+
+  /// Optional callback; fires whenever the trim range changes so
+  /// FootageViewer can keep its Export-to-Gallery state in sync.
+  final TrimRangeChanged? onTrimRangeChanged;
 
   const FootageEditor({
     super.key,
     required this.controller,
     required this.filePath,
+    this.onTrimRangeChanged,
   });
 
   @override
@@ -29,7 +54,57 @@ class _FootageEditorState extends State<FootageEditor> {
   Duration? _clipEnd;
   bool _saving = false;
 
+  /// Cumulative start offsets of each segment in the source manifest, in
+  /// seconds. Includes a trailing entry equal to the total duration so we
+  /// can snap the clip end to the very last segment boundary too.
+  /// Empty if the manifest couldn't be parsed (falls back to no snapping).
+  List<double> _segmentBoundariesSecs = const [];
+
   VideoPlayerController get _controller => widget.controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSegmentBoundaries();
+  }
+
+  /// Load segment start offsets from the source manifest so trim
+  /// boundaries can snap to real segment edges. On any error we fall back
+  /// to an empty list, which disables snapping — the trim UI still works,
+  /// it just won't align to segment cuts.
+  Future<void> _loadSegmentBoundaries() async {
+    try {
+      final file = File(widget.filePath);
+      if (!await file.exists()) return;
+      final segments = await HlsManifest.parseFile(file);
+      if (segments.isEmpty) return;
+      final starts = HlsSegmentMath.cumulativeStarts(segments);
+      final total = HlsSegmentMath.totalDuration(segments);
+      if (!mounted) return;
+      setState(() {
+        _segmentBoundariesSecs = [...starts, total];
+      });
+    } catch (e) {
+      debugPrint('Manifest parse failed in FootageEditor: $e');
+    }
+  }
+
+  /// Snap an arbitrary playback position to the nearest segment boundary.
+  /// Returns the input unchanged when no boundaries are available.
+  Duration _snapToSegment(Duration d) {
+    if (_segmentBoundariesSecs.isEmpty) return d;
+    final targetSecs = d.inMilliseconds / 1000.0;
+    var bestSecs = _segmentBoundariesSecs.first;
+    var bestDelta = (bestSecs - targetSecs).abs();
+    for (final b in _segmentBoundariesSecs) {
+      final delta = (b - targetSecs).abs();
+      if (delta < bestDelta) {
+        bestDelta = delta;
+        bestSecs = b;
+      }
+    }
+    return Duration(milliseconds: (bestSecs * 1000).round());
+  }
 
   void _seekBackward() {
     final current = _controller.value.position;
@@ -46,20 +121,26 @@ class _FootageEditorState extends State<FootageEditor> {
 
   void _setClipStart() {
     setState(() {
-      _clipStart = _controller.value.position;
+      _clipStart = _snapToSegment(_controller.value.position);
       if (_clipEnd != null && _clipEnd! <= _clipStart!) {
         _clipEnd = null;
       }
     });
+    _notifyTrimChanged();
   }
 
   void _setClipEnd() {
     setState(() {
-      _clipEnd = _controller.value.position;
+      _clipEnd = _snapToSegment(_controller.value.position);
       if (_clipStart != null && _clipStart! >= _clipEnd!) {
         _clipStart = null;
       }
     });
+    _notifyTrimChanged();
+  }
+
+  void _notifyTrimChanged() {
+    widget.onTrimRangeChanged?.call(_clipStart, _clipEnd);
   }
 
   void _togglePlayback() {
@@ -68,6 +149,8 @@ class _FootageEditorState extends State<FootageEditor> {
     });
   }
 
+  /// Save Clip: build a sub-manifest in `<appDocuments>/clips/<uuid>/`.
+  /// This no longer re-encodes; it just references the source's segments.
   Future<void> _saveClip() async {
     if (_saving) return;
 
@@ -86,63 +169,16 @@ class _FootageEditorState extends State<FootageEditor> {
     setState(() => _saving = true);
 
     try {
-      // Create clip inside app storage and register in DB (do NOT export to
-      // the device gallery automatically).
-      final appDir = await getApplicationDocumentsDirectory();
-      final clipsDir = Directory('${appDir.path}/clips');
-      final thumbnailsDir = Directory('${appDir.path}/thumbnails');
-      final tempDir = Directory('${appDir.path}/temp');
-      await Future.wait([
-        clipsDir.create(recursive: true),
-        thumbnailsDir.create(recursive: true),
-        tempDir.create(recursive: true),
-      ]);
-
-      final id = const Uuid().v4();
-      final outputPath = '${clipsDir.path}/$id.mp4';
-      final thumbnailPath = '${thumbnailsDir.path}/$id.jpg';
-      final startSecs = start.inMilliseconds / 1000.0;
-      final durationSecs = (end - start).inMilliseconds / 1000.0;
-
-      // Re-encode clip to H.264/AAC to ensure platform player compatibility.
-      await FFmpegKit.execute(
-        '-y -i ${widget.filePath} -ss $startSecs -t $durationSecs -c:v libx264 -preset veryfast -crf 23 -c:a aac -b:a 128k $outputPath',
+      final cp = Provider.of<ClipProvider>(context, listen: false);
+      await cp.saveClipFromRange(
+        sourceManifestPath: widget.filePath,
+        startSecs: start.inMilliseconds / 1000.0,
+        endSecs: end.inMilliseconds / 1000.0,
       );
-
-      if (!await File(outputPath).exists()) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Failed to create clip')),
-          );
-        }
-        return;
-      }
-
-      final fileSize = await File(outputPath).length();
-      await FFmpegKit.execute('-y -i $outputPath -vframes 1 -q:v 2 $thumbnailPath');
-
-      final now = DateTime.now();
-      await Clip(
-        id: id,
-        dateTime: now.toIso8601String(),
-        dateTimePretty: DateFormat('yyyy-MM-dd HH:mm').format(now),
-        clipLength: ((end - start).inMilliseconds / 1000).round(),
-        clipSize: fileSize,
-        triggerType: 'manual',
-        isFlagged: false,
-        clipLocation: outputPath,
-        thumbnailLocation: thumbnailPath,
-      ).insertClipDB();
-
-      // Notify ClipProvider so UI updates (clip list / notifications)
-      try {
-        final cp = Provider.of<ClipProvider>(context, listen: false);
-        cp.markClipSaved();
-      } catch (_) {}
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Clip saved to app')), 
+          const SnackBar(content: Text('Clip saved to app')),
         );
       }
     } catch (e) {

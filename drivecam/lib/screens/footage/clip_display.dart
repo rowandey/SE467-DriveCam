@@ -137,8 +137,17 @@ class _ClipTile extends StatelessWidget {
           ),
           DeleteButton(
             onDelete: () async {
+              // clipLocation now points at a manifest.m3u8 inside a
+              // per-clip directory. The manifest references segments
+              // owned by the source recording via relative paths — we
+              // only delete the clip's own directory, never those
+              // source segments.
               try {
-                await File(clip.clipLocation).delete();
+                final manifestFile = File(clip.clipLocation);
+                final clipDir = manifestFile.parent;
+                if (await clipDir.exists()) {
+                  await clipDir.delete(recursive: true);
+                }
               } catch (_) {}
               try {
                 await File(clip.thumbnailLocation).delete();

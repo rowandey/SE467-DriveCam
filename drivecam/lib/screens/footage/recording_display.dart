@@ -102,8 +102,16 @@ class _RecordingDisplayState extends State<RecordingDisplay> {
                 ),
                 DeleteButton(
                   onDelete: () async {
+                    // recordingLocation now points at a manifest.m3u8
+                    // inside a per-session directory; delete the whole
+                    // directory to sweep up all segment files too.
                     try {
-                      await File(recording.recordingLocation).delete();
+                      final manifestFile =
+                          File(recording.recordingLocation);
+                      final sessionDir = manifestFile.parent;
+                      if (await sessionDir.exists()) {
+                        await sessionDir.delete(recursive: true);
+                      }
                     } catch (_) {}
                     if (recording.thumbnailLocation != null) {
                       try {

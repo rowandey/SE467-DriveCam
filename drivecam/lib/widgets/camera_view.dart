@@ -102,10 +102,11 @@ class _CameraViewState extends State<CameraView> {
 
     recordingProvider.lockBusy();
     try {
-      // Flush the current video segment to disk so no footage is lost.
-      final xFile = await oldController.stopVideoRecording();
-      // Register the segment so it gets concatenated when recording ends.
-      recordingProvider.addSegment(xFile.path);
+      // Pause the HLS session: flushes the current segment into the
+      // manifest and cancels the rotation timer. The session keeps
+      // ownership of the accumulated segments and will continue on the
+      // new controller below.
+      await recordingProvider.pauseSessionForSwap(oldController);
 
       // Dispose the old controller before creating the new one.
       oldController.dispose();
@@ -114,9 +115,9 @@ class _CameraViewState extends State<CameraView> {
       await _initCamera(quality, framerate, audioEnabled);
       if (!mounted) return;
 
-      // Resume recording on the new controller to maintain a continuous session.
-      await _controller!.startVideoRecording();
-      recordingProvider.setSegmentStartTime(DateTime.now());
+      // Resume the HLS session on the new controller: starts a new
+      // segment and re-arms the rotation timer.
+      await recordingProvider.resumeSessionWith(_controller!);
     } catch (e) {
       debugPrint('Camera reinit while recording failed: $e');
     } finally {

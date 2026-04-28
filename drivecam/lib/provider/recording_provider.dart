@@ -1,43 +1,61 @@
+// RecordingProvider — owns the camera recording lifecycle.
+//
+// After the switch to HLS, the single-MP4 + ffmpeg-concat pipeline has
+// been replaced by an [HlsRecordingSession], which drives the camera
+// plugin's stop/restart loop to produce short MP4 segments and maintains
+// a .m3u8 manifest as it goes.
+//
+// The public API here stays close to what ClipProvider and CameraView
+// already consumed: toggleRecording(), isRecording, isBusy, the camera
+// controller, and an onRecordingSaved callback. The segment-tracking
+// surface that existed before (_segments / addSegment / setSegmentStartTime)
+// is gone — that state lives inside [HlsRecordingSession] now.
+
 import 'dart:io';
 
 import 'package:camera/camera.dart';
-import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import 'package:uuid/uuid.dart';
-
+import '../export/hls_export_channel.dart';
+import '../hls/hls_session.dart';
 import '../models/recording.dart';
 
 class RecordingProvider extends ChangeNotifier {
   bool isRecording = false;
   CameraController? _controller;
   CameraController? get controller => _controller;
+
+  // When the currently-active recording session began, in wall-clock time.
+  // Used by the UI's "Recording MM:SS" indicator.
   DateTime? _recordingStartTime;
   DateTime? get recordingStartTime => _recordingStartTime;
-  // Tracks the start of the current camera segment (resets on each clip save).
-  // Used to compute correct in-segment offsets for clip extraction.
-  DateTime? _segmentStartTime;
-  DateTime? get segmentStartTime => _segmentStartTime;
+
+  // Cross-provider mutex: prevents ClipProvider, CameraView settings-swap,
+  // and toggleRecording from stepping on each other while one of them is
+  // manipulating the camera.
   bool _isBusy = false;
   bool get isBusy => _isBusy;
-  // Accumulates all stopped segments so they can be concatenated into one
-  // continuous recording when the session ends.
-  final List<String> _segments = [];
 
-  // Callback invoked after a recording is saved; used by ClipProvider to
-  // process any pending clip that was queued during the recording stop.
+  // The active HLS recording session, if any. ClipProvider reads this to
+  // take a live snapshot of segment metadata while recording is ongoing.
+  HlsRecordingSession? _session;
+  HlsRecordingSession? get session => _session;
+
+  /// Callback invoked after a recording is saved; used by ClipProvider to
+  /// process any pending clip that was queued while recording was stopping.
   Future<void> Function()? onRecordingSaved;
 
   void lockBusy() => _isBusy = true;
   void unlockBusy() => _isBusy = false;
 
-  void addSegment(String path) => _segments.add(path);
-  void setSegmentStartTime(DateTime t) => _segmentStartTime = t;
-
   void setCameraController(CameraController controller) {
     _controller = controller;
   }
 
+  /// Flip recording state: start if currently idle, stop and save if
+  /// currently recording. Guarded by [_isBusy] so that taps during a
+  /// save/restart window are ignored rather than producing a race.
   Future<void> toggleRecording() async {
     if (_isBusy) return;
     if (_controller == null || !_controller!.value.isInitialized) return;
@@ -48,15 +66,13 @@ class RecordingProvider extends ChangeNotifier {
 
     try {
       if (isRecording) {
-        _segments.clear();
-        await _controller!.startVideoRecording();
-        final now = DateTime.now();
-        _recordingStartTime = now;
-        _segmentStartTime = now;
+        await _startSession();
       } else {
-        await _saveRecording();
+        await _stopSessionAndSave();
       }
     } catch (e) {
+      // Revert the optimistic UI flip so the user isn't stuck with a wrong
+      // recording indicator if the camera fails us.
       isRecording = !isRecording;
       notifyListeners();
       debugPrint('Recording toggle failed: $e');
@@ -65,101 +81,111 @@ class RecordingProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> _saveRecording() async {
-    final xFile = await _controller!.stopVideoRecording();
+  Future<void> _startSession() async {
+    final appDir = await getApplicationDocumentsDirectory();
+    final recordingsRoot = Directory(p.join(appDir.path, 'recordings'));
+    await recordingsRoot.create(recursive: true);
+
+    _session =
+        await HlsRecordingSession.create(recordingsRootDir: recordingsRoot.path);
+    await _session!.start(_controller!);
+    _recordingStartTime = DateTime.now();
+  }
+
+  Future<void> _stopSessionAndSave() async {
+    final session = _session;
+    if (session == null) return;
+
+    await session.stop(_controller!);
     final duration = _recordingStartTime != null
         ? DateTime.now().difference(_recordingStartTime!).inSeconds
-        : 0;
+        : session.totalDurationSecs.round();
     _recordingStartTime = null;
-    _segmentStartTime = null;
+    _session = null;
 
-    // Set up storage directories
-    final appDir = await getApplicationDocumentsDirectory();
-    final recordingsDir = Directory('${appDir.path}/recordings');
-    final thumbnailsDir = Directory('${appDir.path}/thumbnails');
-    await Future.wait([
-      recordingsDir.create(recursive: true),
-      thumbnailsDir.create(recursive: true),
-    ]);
-
-    // Generate paths
-    final id = const Uuid().v4();
-    final videoPath = '${recordingsDir.path}/$id.mp4';
-    final thumbnailPath = '${thumbnailsDir.path}/$id.jpg';
-
-    // Include the final segment
-    _segments.add(xFile.path);
-
-    if (_segments.length == 1) {
-      // No clip saves interrupted this session — move the file directly.
-      await File(xFile.path).copy(videoPath);
-      await File(xFile.path).delete();
-    } else {
-      // Clip saves caused stop/restart cycles. Concatenate all segments into
-      // one continuous recording so the viewer sees the full session.
-      await _concatenateSegments(_segments, videoPath, appDir.path);
-      for (final seg in _segments) {
-        try {
-          await File(seg).delete();
-        } catch (_) {}
+    // Compute total size by summing segment file sizes — the manifest is
+    // small enough to ignore, and we want a cheap answer without parsing
+    // MP4 headers.
+    var fileSize = 0;
+    for (final seg in session.segments) {
+      final f = File(p.join(session.sessionDir, seg.uri));
+      if (await f.exists()) {
+        fileSize += await f.length();
       }
     }
-    _segments.clear();
 
-    // Get file size in bytes
-    final fileSize = await File(videoPath).length();
+    // Generate a thumbnail from the first segment. If there are no
+    // segments (zero-duration recording), skip the thumbnail.
+    final appDir = await getApplicationDocumentsDirectory();
+    final thumbnailsDir = Directory(p.join(appDir.path, 'thumbnails'));
+    await thumbnailsDir.create(recursive: true);
+    final thumbnailPath = p.join(thumbnailsDir.path, '${session.id}.jpg');
+    String? savedThumbnailPath;
+    final firstSegmentPath = session.firstSegmentAbsolutePath;
+    if (firstSegmentPath != null) {
+      try {
+        await HlsExportChannel.extractFirstFrame(
+          videoPath: firstSegmentPath,
+          outputPath: thumbnailPath,
+        );
+        if (await File(thumbnailPath).exists()) {
+          savedThumbnailPath = thumbnailPath;
+        }
+      } catch (e) {
+        debugPrint('Thumbnail generation failed: $e');
+      }
+    }
 
-    // Generate thumbnail from first frame
-    await FFmpegKit.execute(
-      '-y -i $videoPath -vframes 1 -q:v 2 $thumbnailPath',
-    );
-    final thumbnailExists = await File(thumbnailPath).exists();
-
-    // Delete previous recording (single-row table)
+    // Delete the previous recording's directory + thumbnail (single-row
+    // recording table — only one is ever kept).
     final existing = await Recording.openRecordingDB();
     if (existing != null) {
-      try {
-        await File(existing.recordingLocation).delete();
-      } catch (_) {}
-      if (existing.thumbnailLocation != null) {
-        try {
-          await File(existing.thumbnailLocation!).delete();
-        } catch (_) {}
-      }
+      await _deleteRecordingArtifacts(existing);
       await existing.deleteRecordingDB();
     }
 
-    // Save new recording to database
     final recording = Recording(
-      id: id,
-      recordingLocation: videoPath,
+      id: session.id,
+      recordingLocation: session.manifestPath,
       recordingLength: duration,
       recordingSize: fileSize,
-      thumbnailLocation: thumbnailExists ? thumbnailPath : null,
+      thumbnailLocation: savedThumbnailPath,
     );
     await recording.insertRecordingDB();
-    // Process any clip request that arrived while recording was stopping.
+
     await onRecordingSaved?.call();
   }
 
-  /// Concatenates multiple video segments into a single output file using the
-  /// FFmpeg concat demuxer. Segments must be from the same codec/format.
-  Future<void> _concatenateSegments(
-    List<String> segments,
-    String outputPath,
-    String appDirPath,
-  ) async {
-    final fileListPath = '$appDirPath/concat_list.txt';
-    // Escape single quotes in paths for the FFmpeg concat file format.
-    final fileList = segments
-        .map((s) => "file '${s.replaceAll("'", "'\\''")}'")
-        .join('\n');
-    await File(fileListPath).writeAsString(fileList);
-    await FFmpegKit.execute(
-      '-y -f concat -safe 0 -i $fileListPath -c copy $outputPath',
-    );
+  /// Best-effort cleanup of a recording's on-disk artifacts. The recording
+  /// location used to be a single .mp4; it's now a manifest sitting inside
+  /// a session directory, so we delete the whole directory.
+  Future<void> _deleteRecordingArtifacts(Recording recording) async {
+    final manifestFile = File(recording.recordingLocation);
+    final sessionDir = manifestFile.parent;
     try {
-      await File(fileListPath).delete();
-    } catch (_) {}
+      if (await sessionDir.exists()) {
+        await sessionDir.delete(recursive: true);
+      }
+    } catch (e) {
+      debugPrint('Failed to delete recording dir: $e');
+    }
+    if (recording.thumbnailLocation != null) {
+      try {
+        await File(recording.thumbnailLocation!).delete();
+      } catch (_) {}
+    }
+  }
+
+  /// Called by CameraView when the camera controller is being swapped
+  /// mid-recording (e.g. the audio toggle changed). Stops the current
+  /// segment on [oldController] but keeps the session alive.
+  Future<void> pauseSessionForSwap(CameraController oldController) async {
+    await _session?.pauseForSwap(oldController);
+  }
+
+  /// Counterpart to [pauseSessionForSwap]: resume recording on a new
+  /// controller after the swap completes.
+  Future<void> resumeSessionWith(CameraController newController) async {
+    await _session?.resumeWith(newController);
   }
 }
