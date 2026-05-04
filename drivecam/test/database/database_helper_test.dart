@@ -8,8 +8,14 @@
 // runs and no test can observe rows or schema mutations left by a previous run.
 // This avoids the isolation problem that arises when tests target the app's
 // fixed on-disk 'drivecam.db' file.
+//
+// Model-layer tests use [DatabaseHelper.setDatabaseForTesting] to inject the
+// in-memory database into the singleton so that methods like
+// [Clip.deleteOldestClipDB] exercise the same code path the app runs.
 
+import 'package:drivecam/database/database_helper.dart';
 import 'package:drivecam/database/queries.dart';
+import 'package:drivecam/models/clip.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -51,13 +57,18 @@ void main() {
   });
 
   // Each test gets its own empty in-memory database so _onCreate always runs
-  // and no test observes state from a previous test.
+  // and no test observes state from a previous test. The same instance is
+  // injected into DatabaseHelper so model methods share the same connection.
   setUp(() async {
     db = await openTestDatabase();
+    // Inject the in-memory database into the singleton so that Clip model
+    // methods call the same connection as the test assertions below.
+    DatabaseHelper.setDatabaseForTesting(db);
   });
 
-  // Close the in-memory database after each test to free resources.
+  // Close the in-memory database and reset the singleton after each test.
   tearDown(() async {
+    DatabaseHelper.setDatabaseForTesting(null);
     await db.close();
   });
 
@@ -183,6 +194,55 @@ void main() {
     rows = await db.rawQuery(selectAllClips);
     expect(rows, hasLength(1));
     expect(rows.single['id'], 'clip-new');
+  });
+
+  // This test exercises the actual production code path: Clip.deleteOldestClipDB()
+  // calls DatabaseHelper().database and then rawDelete(deleteOldestClip).
+  //
+  // Previously, deleteOldestClipDB() passed [id] as a positional argument even
+  // though deleteOldestClip has no '?' placeholders. Sqflite would throw a
+  // DatabaseException at runtime because no binding sites exist. This test
+  // would have caught that bug and will fail again if it is reintroduced.
+  test('Clip.deleteOldestClipDB() removes the chronologically oldest clip via the model layer', () async {
+    // Seed two clips through the model layer to ensure insertion also works
+    // end-to-end.
+    final older = Clip(
+      id: 'clip-older',
+      dateTime: '2026-01-01T10:00:00.000Z',
+      dateTimePretty: 'Jan 1, 2026 10:00 AM',
+      clipLength: 30,
+      clipSize: 12,
+      triggerType: 'manual',
+      isFlagged: false,
+      clipLocation: '/clips/older.mp4',
+      thumbnailLocation: '/thumbs/older.png',
+    );
+    final newer = Clip(
+      id: 'clip-newer',
+      dateTime: '2026-01-02T10:00:00.000Z',
+      dateTimePretty: 'Jan 2, 2026 10:00 AM',
+      clipLength: 45,
+      clipSize: 15,
+      triggerType: 'impact',
+      isFlagged: false,
+      clipLocation: '/clips/newer.mp4',
+      thumbnailLocation: '/thumbs/newer.png',
+    );
+    await older.insertClipDB();
+    await newer.insertClipDB();
+
+    // Confirm both rows are present before the delete.
+    var rows = await db.rawQuery(selectAllClips);
+    expect(rows, hasLength(2));
+
+    // Call the model method — this is the path the production app executes.
+    // It must complete without throwing a DatabaseException.
+    await older.deleteOldestClipDB();
+
+    // Only the newer clip should remain.
+    rows = await db.rawQuery(selectAllClips);
+    expect(rows, hasLength(1));
+    expect(rows.single['id'], 'clip-newer');
   });
 }
 
