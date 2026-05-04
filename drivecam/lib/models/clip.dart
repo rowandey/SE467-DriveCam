@@ -94,7 +94,8 @@ class Clip {
   ///
   /// Uses the [deleteOldestClip] SQL constant, which selects the target row
   /// internally via a sub-query — no placeholder is needed and no id is passed.
-  /// This is called by the app when storage limits are exceeded.
+  /// Call this from storage-management code when you decide the oldest clip
+  /// should be removed, such as during cleanup for storage limits.
   Future<void> deleteOldestClipDB() async {
     final db = await DatabaseHelper().database;
     // BUG FIX: deleteOldestClip has no '?' placeholders, so no argument list
