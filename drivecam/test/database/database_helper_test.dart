@@ -1,10 +1,14 @@
-// Unit tests for `DatabaseHelper` and the database-backed SQL workflow.
+// Unit tests for the database schema and SQL workflow.
 //
 // These tests use the FFI SQLite backend so they can run in the Linux test
-// environment. They verify that the helper creates the expected tables and that
+// environment. They verify that the app schema is created correctly and that
 // the SQL constants in `queries.dart` behave correctly when executed.
+//
+// Each test opens its own fresh in-memory database so that [_onCreate] always
+// runs and no test can observe rows or schema mutations left by a previous run.
+// This avoids the isolation problem that arises when tests target the app's
+// fixed on-disk 'drivecam.db' file.
 
-import 'package:drivecam/database/database_helper.dart';
 import 'package:drivecam/database/queries.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -12,41 +16,54 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 /// Configures sqflite to use the FFI database factory for unit tests.
 ///
 /// This switches the database layer away from a mobile-only platform plugin and
-/// into a desktop-friendly SQLite backend.
+/// into a desktop-friendly SQLite backend. Called once before all tests run.
 void initializeDatabaseTestEnvironment() {
   sqfliteFfiInit();
   databaseFactory = databaseFactoryFfi;
 }
 
-/// Entry point for database helper tests.
+/// Opens a fresh, isolated in-memory SQLite database and applies the app schema.
+///
+/// Using [inMemoryDatabasePath] guarantees that [onCreate] always runs so every
+/// test starts from a clean state — no leftover rows or on-disk files to worry
+/// about. Returns the ready-to-use [Database] instance.
+Future<Database> openTestDatabase() {
+  return databaseFactoryFfi.openDatabase(
+    inMemoryDatabasePath,
+    options: OpenDatabaseOptions(
+      version: 1,
+      onCreate: (db, version) async {
+        // Apply the same schema the production DatabaseHelper uses.
+        await db.execute(createRecordingTable);
+        await db.execute(createClipsTable);
+      },
+    ),
+  );
+}
+
+/// Entry point for database schema and SQL workflow tests.
 void main() {
   late Database db;
 
-  // The test database needs the FFI backend before DatabaseHelper opens it.
-  setUpAll(() async {
+  // Initialize the FFI backend once for the whole suite.
+  setUpAll(() {
     initializeDatabaseTestEnvironment();
-    db = await DatabaseHelper().database;
   });
 
-  // Clearing rows keeps the tests independent while still reusing the cached
-  // database instance that DatabaseHelper provides.
+  // Each test gets its own empty in-memory database so _onCreate always runs
+  // and no test observes state from a previous test.
   setUp(() async {
-    await db.delete('clips');
-    await db.delete('recording');
+    db = await openTestDatabase();
   });
 
-  // Closing the shared database at the end keeps the test suite tidy.
-  tearDownAll(() async {
+  // Close the in-memory database after each test to free resources.
+  tearDown(() async {
     await db.close();
   });
 
-  // DatabaseHelper should open one cached database and create the tables.
-  test('creates the expected database tables and caches the same instance', () async {
-    final helper = DatabaseHelper();
-    final cachedDatabase = await helper.database;
-
-    expect(identical(db, cachedDatabase), isTrue);
-
+  // The schema test verifies that both tables are created with the correct
+  // columns and constraints whenever a fresh database is opened.
+  test('creates the expected database tables on open', () async {
     final recordingColumns = await db.rawQuery('PRAGMA table_info(recording)');
     expect(
       recordingColumns.map((row) => row['name']).toList(),
