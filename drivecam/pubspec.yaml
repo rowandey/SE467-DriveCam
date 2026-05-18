@@ -1,7 +1,7 @@
 name: drivecam
 description: "A new Flutter project."
 publish_to: 'none'
-version: 0.1.0
+version: 0.1.1
 
 environment:
   sdk: ^3.10.4
@@ -30,6 +30,8 @@ dev_dependencies:
   # Provides InMemorySharedPreferencesAsync for unit-testing SharedPreferencesAsync
   # without needing a real platform plugin.
   shared_preferences_platform_interface: ^2.4.1
+  # Lets the sqflite-based database tests run in a desktop test environment.
+  sqflite_common_ffi: ^2.3.4+4
 
 flutter_launcher_icons:
   android: true
