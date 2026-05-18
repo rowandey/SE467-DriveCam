@@ -2,6 +2,8 @@
 
 import 'dart:io';
 
+import 'package:drivecam/analytics/analytics_client.dart';
+import 'package:drivecam/analytics/analytics_controller.dart';
 import 'package:drivecam/provider/recording_provider.dart';
 import 'package:drivecam/provider/settings_provider.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -35,6 +37,13 @@ void main() {
     return s;
   }
 
+  /// Returns an [AnalyticsController] backed by a no-op client so that no
+  /// events are ever sent to Amplitude during tests. [NoopAnalyticsClient]
+  /// returns [isConfigured] == false, which keeps [canTrack] false regardless
+  /// of consent state — all tracking calls become immediate no-ops.
+  AnalyticsController makeAnalytics() =>
+      AnalyticsController(const NoopAnalyticsClient());
+
   // ===========================================================================
   // addSegment — basic accumulation (no eviction expected)
   // ===========================================================================
@@ -43,7 +52,7 @@ void main() {
     // This is intentional: the storage limit can never be exceeded if we
     // don't know the bitrate, so it's safer to under-count than over-count.
     test('without a bitrate set, accumulates duration but estimates 0 bytes', () {
-      final provider = RecordingProvider(makeSettings());
+      final provider = RecordingProvider(makeSettings(), makeAnalytics());
 
       provider.addSegment('/fake/seg1.mp4', 120);
 
@@ -55,7 +64,7 @@ void main() {
     // bytes = bitrate_bps × duration_seconds ÷ 8 (bits to bytes conversion).
     // Example: 5 Mbps × 10 s ÷ 8 = 6,250,000 bytes.
     test('with a bitrate set, estimates bytes as bitrate × duration ÷ 8', () {
-      final provider = RecordingProvider(makeSettings());
+      final provider = RecordingProvider(makeSettings(), makeAnalytics());
       provider.setVideoBitrate(5000000); // 5 Mbps
 
       provider.addSegment('/fake/seg1.mp4', 10); // 10 seconds
@@ -67,7 +76,7 @@ void main() {
 
     // Calling addSegment multiple times should grow both running totals.
     test('multiple calls accumulate duration and bytes correctly', () {
-      final provider = RecordingProvider(makeSettings());
+      final provider = RecordingProvider(makeSettings(), makeAnalytics());
       provider.setVideoBitrate(8000000); // 8 Mbps
 
       provider.addSegment('/fake/s1.mp4', 300); // 300,000,000 bytes
@@ -88,7 +97,7 @@ void main() {
     // When total duration is still under the limit, nothing should be evicted.
     test('no eviction when total duration is within the limit', () {
       // 30min = 1800s. Two 600s segments = 1200s ≤ 1800s — safe.
-      final provider = RecordingProvider(makeSettings(footageLimit: '30min'));
+      final provider = RecordingProvider(makeSettings(footageLimit: '30min'), makeAnalytics());
 
       provider.addSegment('/fake/s1.mp4', 600);
       provider.addSegment('/fake/s2.mp4', 600);
@@ -102,7 +111,7 @@ void main() {
     // discarded to make room for newer footage.
     test('evicts the oldest segment once the time limit is exceeded', () {
       // 30min = 1800s. Two 1000s segments → 2000 > 1800 → evict s1 → 1000s.
-      final provider = RecordingProvider(makeSettings(footageLimit: '30min'));
+      final provider = RecordingProvider(makeSettings(footageLimit: '30min'), makeAnalytics());
 
       provider.addSegment('/fake/s1.mp4', 1000); // oldest — will be evicted
       provider.addSegment('/fake/s2.mp4', 1000); // triggers eviction of s1
@@ -116,7 +125,7 @@ void main() {
     test('evicts multiple oldest segments until within the time limit', () {
       // 30min = 1800s. Three 700s segments → total 2100 > 1800.
       // Evict s1 (oldest) → 1400 ≤ 1800 → stop. s2 and s3 survive.
-      final provider = RecordingProvider(makeSettings(footageLimit: '30min'));
+      final provider = RecordingProvider(makeSettings(footageLimit: '30min'), makeAnalytics());
 
       provider.addSegment('/fake/s1.mp4', 700);
       provider.addSegment('/fake/s2.mp4', 700);
@@ -132,7 +141,7 @@ void main() {
       // Three 1000s segments with a 1800s limit.
       // Adding s3: total 3000 > 1800. Evict s1 → 2000 > 1800. Evict s2 → 1000 ≤ 1800.
       // Only s3 (the newest) should survive.
-      final provider = RecordingProvider(makeSettings(footageLimit: '30min'));
+      final provider = RecordingProvider(makeSettings(footageLimit: '30min'), makeAnalytics());
 
       provider.addSegment('/fake/s1.mp4', 1000);
       provider.addSegment('/fake/s2.mp4', 1000);
@@ -145,7 +154,7 @@ void main() {
     // After an eviction the running total is correct, so subsequent segments
     // are evaluated against an accurate accumulated duration — not a stale one.
     test('subsequent segments accumulate on top of the evicted-corrected total', () {
-      final provider = RecordingProvider(makeSettings(footageLimit: '30min')); // 1800s
+      final provider = RecordingProvider(makeSettings(footageLimit: '30min'), makeAnalytics()); // 1800s
 
       provider.addSegment('/fake/s1.mp4', 1000); // s1 evicted when s2 arrives
       provider.addSegment('/fake/s2.mp4', 1000); // remaining: 1000s
@@ -164,7 +173,7 @@ void main() {
     // At 8 Mbps, 300s → 8,000,000 × 300 ÷ 8 = 300,000,000 bytes ≈ 286 MB.
     // Three segments → ~858 MB, which is under 1 GB (1,073,741,824 bytes).
     test('no eviction when total bytes are within the storage limit', () {
-      final provider = RecordingProvider(makeSettings(storageLimit: '1GB'));
+      final provider = RecordingProvider(makeSettings(storageLimit: '1GB'), makeAnalytics());
       provider.setVideoBitrate(8000000);
 
       provider.addSegment('/fake/s1.mp4', 300);
@@ -177,7 +186,7 @@ void main() {
     // A fourth 300s segment at 8 Mbps pushes the total to ~1,200 MB, which
     // exceeds the 1 GB limit. s1 is evicted, bringing the total back to ~858 MB.
     test('evicts the oldest segment when the storage limit is exceeded', () {
-      final provider = RecordingProvider(makeSettings(storageLimit: '1GB'));
+      final provider = RecordingProvider(makeSettings(storageLimit: '1GB'), makeAnalytics());
       provider.setVideoBitrate(8000000); // 8 Mbps — ~286 MB per 300s segment
 
       provider.addSegment('/fake/s1.mp4', 300);
@@ -198,6 +207,7 @@ void main() {
       // storageLimit: 1GB — this will be exceeded.
       final provider = RecordingProvider(
         makeSettings(footageLimit: '6h', storageLimit: '1GB'),
+        makeAnalytics(),
       );
       provider.setVideoBitrate(8000000);
 
@@ -223,6 +233,7 @@ void main() {
       // Bitrate: 1 Mbps — tiny, so byte accumulation stays negligible.
       final provider = RecordingProvider(
         makeSettings(footageLimit: '30min', storageLimit: '64GB'),
+        makeAnalytics(),
       );
       provider.setVideoBitrate(1000000); // 1 Mbps
 
@@ -239,6 +250,7 @@ void main() {
       // footageLimit: 6h (21600s) — unreachably high for this test.
       final provider = RecordingProvider(
         makeSettings(footageLimit: '6h', storageLimit: '1GB'),
+        makeAnalytics(),
       );
       provider.setVideoBitrate(8000000); // 8 Mbps — ~286 MB per 300s segment
 
@@ -261,7 +273,7 @@ void main() {
     // This is the key dashcam behaviour: old footage is not just removed from
     // the index — the actual bytes are freed so storage stays bounded.
     test('evicted segment file is deleted from disk', () async {
-      final provider = RecordingProvider(makeSettings(footageLimit: '30min')); // 1800s
+      final provider = RecordingProvider(makeSettings(footageLimit: '30min'), makeAnalytics()); // 1800s
 
       // Create real temporary files so we can assert on disk state after eviction.
       final tmpDir = Directory.systemTemp.createTempSync('rp_eviction_test_');
@@ -288,7 +300,7 @@ void main() {
     // crash), _evictOldestIfNeeded wraps the delete in a try/catch so the app
     // doesn't crash — the segment is still removed from the in-memory list.
     test('eviction with a non-existent path does not throw', () {
-      final provider = RecordingProvider(makeSettings(footageLimit: '30min')); // 1800s
+      final provider = RecordingProvider(makeSettings(footageLimit: '30min'), makeAnalytics()); // 1800s
 
       // Use paths that definitely don't exist on the file system.
       expect(
@@ -312,12 +324,12 @@ void main() {
     // duration of the current in-progress segment when it needs to be flushed.
 
     test('segmentStartTime is null before any recording starts', () {
-      final provider = RecordingProvider(makeSettings());
+      final provider = RecordingProvider(makeSettings(), makeAnalytics());
       expect(provider.segmentStartTime, isNull);
     });
 
     test('setSegmentStartTime stores the provided DateTime', () {
-      final provider = RecordingProvider(makeSettings());
+      final provider = RecordingProvider(makeSettings(), makeAnalytics());
       final t = DateTime(2026, 5, 14, 10, 0, 0);
 
       provider.setSegmentStartTime(t);
@@ -326,7 +338,7 @@ void main() {
     });
 
     test('setSegmentStartTime can be updated after the first set', () {
-      final provider = RecordingProvider(makeSettings());
+      final provider = RecordingProvider(makeSettings(), makeAnalytics());
       final t1 = DateTime(2026, 5, 14, 10, 0, 0);
       final t2 = DateTime(2026, 5, 14, 10, 5, 0);
 
@@ -346,12 +358,12 @@ void main() {
     // widget layer and makes the callback mechanism itself unit-testable.
 
     test('onFlushRequested callback is null by default', () {
-      final provider = RecordingProvider(makeSettings());
+      final provider = RecordingProvider(makeSettings(), makeAnalytics());
       expect(provider.onFlushRequested, isNull);
     });
 
     test('assigned callback is stored and retrievable', () {
-      final provider = RecordingProvider(makeSettings());
+      final provider = RecordingProvider(makeSettings(), makeAnalytics());
       var called = false;
       provider.onFlushRequested = () { called = true; };
 
@@ -361,7 +373,7 @@ void main() {
     });
 
     test('callback can be cleared by setting it to null', () {
-      final provider = RecordingProvider(makeSettings());
+      final provider = RecordingProvider(makeSettings(), makeAnalytics());
       provider.onFlushRequested = () {};
 
       provider.onFlushRequested = null;
