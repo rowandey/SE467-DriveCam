@@ -35,8 +35,10 @@ void main() async {
     settings: settingsProvider,
   );
 
-  final recordingProvider = RecordingProvider(analyticsController);
-  final clipProvider = ClipProvider(recordingProvider, analyticsController);
+  // Pass both settingsProvider (for rolling-buffer eviction) and
+  // analyticsController (for event tracking) to each provider.
+  final recordingProvider = RecordingProvider(settingsProvider, analyticsController);
+  final clipProvider = ClipProvider(recordingProvider, settingsProvider, analyticsController);
   recordingProvider.onRecordingSaved = clipProvider.processPendingClip;
 
   runApp(
