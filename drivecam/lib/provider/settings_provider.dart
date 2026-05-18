@@ -31,6 +31,23 @@ class SettingsProvider extends ChangeNotifier {
     }
   }
 
+  static int clipDurationToSeconds(String value) {
+    switch (value) {
+      case '0s': return 0;
+      case '5s':  return 5;
+      case '30s': return 30;
+      case '1m':  return 60;
+      case '2m':  return 120;
+      case '3m':  return 180;
+      case '5m':  return 300;
+      default:    return 120;
+    }
+  }
+
+  // Derives the video encoder bitrate (bps) from quality + framerate so the
+  // camera controller uses a known, fixed rate rather than a platform default.
+  // A fixed bitrate is required for accurate storage-consumption estimates
+  // elsewhere in the app (bytes = bitrate × seconds ÷ 8).
   static int videoBitrateForSettings(String quality, String framerate) {
     final fps = framerateToFps(framerate);
     switch (quality) {
@@ -55,6 +72,7 @@ class SettingsProvider extends ChangeNotifier {
     }
   }
 
+  // Converts a footageLimitOptions string to seconds for rolling-buffer eviction.
   static int footageLimitToSeconds(String value) {
     switch (value) {
       case '30min': return 1800;
@@ -69,8 +87,8 @@ class SettingsProvider extends ChangeNotifier {
     }
   }
 
+  // Converts a storageLimitOptions string to bytes (binary gigabytes).
   static int storageLimitToBytes(String value) {
-    // 1 GB = 1024^3 bytes (binary gigabytes, matching platform storage reporting)
     const gb = 1024 * 1024 * 1024;
     switch (value) {
       case '1GB':  return 1 * gb;
@@ -85,24 +103,7 @@ class SettingsProvider extends ChangeNotifier {
     }
   }
 
-  static int clipDurationToSeconds(String value) {
-    switch (value) {
-      case '0s': return 0;
-      case '5s':  return 5;
-      case '30s': return 30;
-      case '1m':  return 60;
-      case '2m':  return 120;
-      case '3m':  return 180;
-      case '5m':  return 300;
-      default:    return 120;
-    }
-  }
-
-  /// Converts a [clipStorageLimitOptions] string to bytes.
-  ///
-  /// Mirrors [storageLimitToBytes] but covers the clip-specific option set
-  /// (1 GB – 8 GB). Uses binary gigabytes (1 GB = 1024^3 bytes) to match how
-  /// platform storage is reported.
+  // Converts a clipStorageLimitOptions string to bytes (binary gigabytes).
   static int clipStorageLimitToBytes(String value) {
     const gb = 1024 * 1024 * 1024;
     switch (value) {
@@ -130,6 +131,7 @@ class SettingsProvider extends ChangeNotifier {
 
   // Onboarding
   bool onboardingComplete = false;
+  bool analyticsEnabled = false;
 
   Future<void> loadPrefs() async {
     final prefs = SharedPreferencesAsync();
@@ -143,6 +145,7 @@ class SettingsProvider extends ChangeNotifier {
     // Default to true so new installs record with audio out of the box.
     audioEnabled = await prefs.getBool('audioEnabled') ?? true;
     onboardingComplete = await prefs.getBool('onboardingComplete') ?? false;
+    analyticsEnabled = await prefs.getBool('analyticsEnabled') ?? false;
     notifyListeners();
   }
 
@@ -201,5 +204,11 @@ class SettingsProvider extends ChangeNotifier {
     audioEnabled = value;
     notifyListeners();
     await SharedPreferencesAsync().setBool('audioEnabled', value);
+  }
+
+  void setAnalyticsEnabled(bool value) async {
+    analyticsEnabled = value;
+    notifyListeners();
+    await SharedPreferencesAsync().setBool('analyticsEnabled', value);
   }
 }

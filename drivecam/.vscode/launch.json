@@ -1,0 +1,23 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // Standard debug launch. --dart-define-from-file reads the local .env (JSON
+      // format) and injects each key as a compile-time constant, equivalent to
+      // passing --dart-define=KEY=VALUE for every entry in the file.
+      // The .env file is gitignored, so each developer supplies their own locally.
+      "name": "drivecam (debug)",
+      "request": "launch",
+      "type": "dart",
+      "args": ["--dart-define-from-file=.env"]
+    },
+    {
+      // Release profile — same injection, optimised build.
+      "name": "drivecam (release)",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "release",
+      "args": ["--dart-define-from-file=.env"]
+    }
+  ]
+}

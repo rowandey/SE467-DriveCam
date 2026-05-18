@@ -1,3 +1,18 @@
+// clip_provider.dart
+// Owns clip saving logic, clip notification state, and clip storage enforcement.
+//
+// Clip storage enforcement (from main branch):
+//   After each clip is saved the provider checks whether the total size of all
+//   stored clips exceeds SettingsProvider.clipStorageLimit. If so it deletes
+//   the oldest clip(s) — FIFO, by date_time ascending — until the total is
+//   back within the limit. This mirrors how RecordingProvider evicts old
+//   recording segments.
+//
+// Analytics (from KPI branch):
+//   Each saved clip fires a trackClipSaved event via AnalyticsController,
+//   recording the clip duration, trigger type, and whether it was taken from
+//   a live recording or a previously saved file.
+
 import 'dart:io';
 
 import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
@@ -6,24 +21,20 @@ import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
+import '../analytics/analytics_controller.dart';
 import '../models/clip.dart';
 import '../models/recording.dart';
 import 'recording_provider.dart';
 import 'settings_provider.dart';
 
-/// Owns clip saving logic, clip notification state, and clip storage enforcement.
-///
-/// After each clip is saved the provider checks whether the total size of all
-/// stored clips exceeds [SettingsProvider.clipStorageLimit]. If so it deletes
-/// the oldest clip(s) — FIFO, by [date_time] ascending — until the total is
-/// back within the limit. This mirrors how [RecordingProvider] evicts old
-/// recording segments.
 class ClipProvider extends ChangeNotifier {
   final RecordingProvider _recordingProvider;
   final SettingsProvider _settingsProvider;
+  final AnalyticsController _analytics;
 
-  // [_settingsProvider] is needed to read clipStorageLimit during eviction.
-  ClipProvider(this._recordingProvider, this._settingsProvider);
+  // _settingsProvider is needed to read clipStorageLimit during eviction.
+  // _analytics is needed to track clip save events.
+  ClipProvider(this._recordingProvider, this._settingsProvider, this._analytics);
 
   bool clipSaved = false;
   bool clipInProgress = false;
@@ -31,6 +42,7 @@ class ClipProvider extends ChangeNotifier {
   // Pending clip request to process after recording stops.
   ({int secondsPre, String triggerType})? _pendingClip;
 
+  /// Clears the clip-saved notification flag and notifies listeners.
   void dismissClipNotification() {
     clipSaved = false;
     notifyListeners();
@@ -42,6 +54,8 @@ class ClipProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Starts the post-duration countdown and marks a clip as in progress.
+  /// [postDurationSeconds] sets the countdown end time shown in the UI.
   void startClipProgress(int postDurationSeconds) {
     clipInProgress = true;
     clipSaved = false;
@@ -58,14 +72,9 @@ class ClipProvider extends ChangeNotifier {
   /// Enforces the clip storage limit by deleting the oldest clips first.
   ///
   /// Loads all clips from the database, sums their sizes, then removes the
-  /// oldest clip (lowest [date_time]) repeatedly until the total is within
-  /// [SettingsProvider.clipStorageLimit]. Both the video file and its thumbnail
+  /// oldest clip (lowest date_time) repeatedly until the total is within
+  /// SettingsProvider.clipStorageLimit. Both the video file and its thumbnail
   /// are deleted from disk before the DB row is removed.
-  ///
-  /// This is intentionally called *after* [insertClipDB] so the newly saved
-  /// clip is included in the total — if it alone would exceed the limit the
-  /// enforcement still fires and evicts the oldest entry, which may be the
-  /// clip that was just saved if no other clips exist.
   ///
   /// Exposed without a leading underscore so that unit tests can call it
   /// directly after seeding the database. Do not call this from production
@@ -93,7 +102,7 @@ class ClipProvider extends ChangeNotifier {
   }
 
   /// Saves a clip of the last N seconds of the active recording.
-  /// secondsPre is how many seconds before the trigger to include; used as
+  /// [secondsPre] is how many seconds before the trigger to include; used as
   /// the fallback clip length when the live recording is no longer available.
   Future<void> saveClipFromLive({
     required int clipDurationSeconds,
@@ -137,6 +146,7 @@ class ClipProvider extends ChangeNotifier {
   }
 
   /// Saves a clip from the most-recent saved recording between two time frames.
+  /// [startSeconds] and [endSeconds] are offsets into the recording file.
   Future<void> saveClipFromRecording({
     required int startSeconds,
     required int endSeconds,
@@ -216,7 +226,12 @@ class ClipProvider extends ChangeNotifier {
       clipLocation: clipPath,
       thumbnailLocation: thumbnailPath,
     ).insertClipDB();
-
+    // Track the clip save event before enforcing the storage limit.
+    _analytics.trackClipSaved(
+      durationSeconds: actualDuration,
+      triggerType: triggerType,
+      fromLiveRecording: true,
+    );
     // Remove oldest clip(s) if the total clip storage now exceeds the limit.
     await enforceClipStorageLimit();
     _clearClipProgress();
@@ -267,7 +282,12 @@ class ClipProvider extends ChangeNotifier {
       clipLocation: clipPath,
       thumbnailLocation: thumbnailPath,
     ).insertClipDB();
-
+    // Track the clip save event before enforcing the storage limit.
+    _analytics.trackClipSaved(
+      durationSeconds: duration,
+      triggerType: triggerType,
+      fromLiveRecording: false,
+    );
     // Remove oldest clip(s) if the total clip storage now exceeds the limit.
     await enforceClipStorageLimit();
     _clearClipProgress();

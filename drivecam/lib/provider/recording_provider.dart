@@ -2,7 +2,7 @@
 // Manages the full lifecycle of a recording session: start/stop, segment
 // tracking, rolling-buffer eviction, and final file assembly via FFmpeg.
 //
-// Rolling-buffer design:
+// Rolling-buffer design (from main branch):
 //   Recording is split into segments when clips are saved, settings change,
 //   or the periodic 5-minute flush timer fires. Each completed segment carries
 //   a duration (seconds) and an estimated byte count (bitrate × duration ÷ 8).
@@ -10,6 +10,11 @@
 //   segment(s) from disk and the tracking list until both the time limit and
 //   the storage limit from SettingsProvider are satisfied. The final saved
 //   recording only contains the segments that survived eviction.
+//
+// Analytics (from KPI branch):
+//   Recording start and stop events are tracked via AnalyticsController using
+//   settings read directly from SettingsProvider rather than a cached snapshot,
+//   since SettingsProvider is already injected for rolling-buffer eviction.
 
 import 'dart:async';
 import 'dart:io';
@@ -20,6 +25,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
+import '../analytics/analytics_controller.dart';
 import '../models/recording.dart';
 import 'settings_provider.dart';
 
@@ -38,10 +44,12 @@ class _SegmentInfo {
 }
 
 class RecordingProvider extends ChangeNotifier {
-  // SettingsProvider reference is required so eviction can read the current
-  // footage time limit and storage limit without going through the widget tree.
+  // SettingsProvider is required so eviction can read the current footage time
+  // limit and storage limit without going through the widget tree.
+  // AnalyticsController tracks recording lifecycle events for product metrics.
   final SettingsProvider _settingsProvider;
-  RecordingProvider(this._settingsProvider);
+  final AnalyticsController _analytics;
+  RecordingProvider(this._settingsProvider, this._analytics);
 
   bool isRecording = false;
   CameraController? _controller;
@@ -82,6 +90,8 @@ class RecordingProvider extends ChangeNotifier {
   void lockBusy() => _isBusy = true;
   void unlockBusy() => _isBusy = false;
 
+  /// Stores the active CameraController reference so RecordingProvider can
+  /// check initialization state. Called by CameraView after every (re)init.
   void setCameraController(CameraController controller) {
     _controller = controller;
   }
@@ -165,8 +175,8 @@ class RecordingProvider extends ChangeNotifier {
   }
 
   /// Toggles between recording and stopped states.
-  /// On start: clears accumulated segments, starts the flush timer.
-  /// On stop: cancels the flush timer, saves and concatenates all segments.
+  /// On start: clears accumulated segments, starts the flush timer, and fires the recordingStarted analytics event.
+  /// On stop: cancels the flush timer, saves and concatenates all segments, fires the recordingStopped event.
   Future<void> toggleRecording() async {
     if (_isBusy) return;
     if (_controller == null || !_controller!.value.isInitialized) return;
@@ -188,6 +198,13 @@ class RecordingProvider extends ChangeNotifier {
         // Begin periodic flushes so rolling-buffer limits are enforced even
         // when no clips are saved and no settings changes occur.
         _startFlushTimer();
+        // Read quality/framerate/audio directly from SettingsProvider since it
+        // is already injected — no separate snapshot needed.
+        _analytics.trackRecordingStarted(
+          quality: _settingsProvider.quality,
+          framerate: _settingsProvider.framerate,
+          audioEnabled: _settingsProvider.audioEnabled,
+        );
       } else {
         // Stop the flush timer before saving so it can't fire mid-save.
         _stopFlushTimer();
@@ -285,6 +302,8 @@ class RecordingProvider extends ChangeNotifier {
       thumbnailLocation: thumbnailExists ? thumbnailPath : null,
     );
     await recording.insertRecordingDB();
+    // Track the recording stop event before processing any queued clip.
+    _analytics.trackRecordingStopped(durationSeconds: duration);
     // Process any clip request that arrived while recording was stopping.
     await onRecordingSaved?.call();
   }

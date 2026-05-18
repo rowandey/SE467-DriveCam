@@ -1,3 +1,14 @@
+// camera_view.dart
+// Owns the CameraController and renders the live camera preview.
+//
+// Rolling-buffer integration (from main branch):
+//   Calls setVideoBitrate after each controller init so RecordingProvider can
+//   estimate per-segment storage accurately (bytes = bitrate × seconds ÷ 8).
+//   Implements _doPeriodicFlush, which RecordingProvider's 5-minute timer
+//   invokes to flush the current segment to disk so old footage can be evicted.
+//   Also handles mid-recording reinit (audio setting change) by flushing the
+//   current segment with its duration before swapping controllers.
+
 import 'dart:async';
 
 import 'package:camera/camera.dart';
@@ -30,6 +41,7 @@ class _CameraViewState extends State<CameraView> {
   RecordingProvider? _recordingProvider;
 
   /// Initializes (or reinitializes) the [CameraController] with the given settings.
+  /// Also registers the bitrate with RecordingProvider and wires the flush callback.
   Future<void> _initCamera(
     String quality,
     String framerate,
@@ -94,6 +106,8 @@ class _CameraViewState extends State<CameraView> {
     }
   }
 
+  /// Reads settings and triggers clip save logic via ClipProvider.
+  /// If a post-duration is configured the clip is deferred until the timer fires.
   Future<void> _triggerClipSave() async {
     final clipProvider = context.read<ClipProvider>();
     final settingsProvider = context.read<SettingsProvider>();
