@@ -13,6 +13,8 @@
 
 import 'dart:io';
 
+import 'package:drivecam/analytics/analytics_client.dart';
+import 'package:drivecam/analytics/analytics_controller.dart';
 import 'package:drivecam/database/database_helper.dart';
 import 'package:drivecam/database/queries.dart';
 import 'package:drivecam/models/clip.dart';
@@ -70,8 +72,11 @@ void main() {
     final settings = SettingsProvider();
     // Set the field directly to avoid async SharedPreferences calls.
     settings.clipStorageLimit = clipStorageLimit;
-    final recording = RecordingProvider(settings);
-    return ClipProvider(recording, settings);
+    // NoopAnalyticsClient.isConfigured returns false, so canTrack is always
+    // false — no events are ever sent to Amplitude during tests.
+    final analytics = AnalyticsController(const NoopAnalyticsClient());
+    final recording = RecordingProvider(settings, analytics);
+    return ClipProvider(recording, settings, analytics);
   }
 
   /// Inserts a clip row directly into the test database.
