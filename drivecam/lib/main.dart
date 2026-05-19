@@ -16,7 +16,6 @@ import 'package:provider/provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   final themeProvider = ThemeProvider();
   final settingsProvider = SettingsProvider();
   await Future.wait([

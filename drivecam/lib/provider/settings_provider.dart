@@ -128,6 +128,9 @@ class SettingsProvider extends ChangeNotifier {
   String preDurationLength = clipDurationOptions[2];
   String postDurationLength = clipDurationOptions[2];
   String clipStorageLimit = clipStorageLimitOptions[1];
+  // Voice clip is enabled by default — users can turn it off in settings
+  // to save battery life when they prefer tap-to-clip instead.
+  bool voiceClipEnabled = true;
 
   // Onboarding
   bool onboardingComplete = false;
@@ -144,6 +147,8 @@ class SettingsProvider extends ChangeNotifier {
     clipStorageLimit = await prefs.getString('clipStorageLimit') ?? clipStorageLimitOptions[1];
     // Default to true so new installs record with audio out of the box.
     audioEnabled = await prefs.getBool('audioEnabled') ?? true;
+    // Default to true — voice clip is on unless the user explicitly disables it.
+    voiceClipEnabled = await prefs.getBool('voiceClipEnabled') ?? true;
     onboardingComplete = await prefs.getBool('onboardingComplete') ?? false;
     analyticsEnabled = await prefs.getBool('analyticsEnabled') ?? false;
     notifyListeners();
@@ -197,6 +202,16 @@ class SettingsProvider extends ChangeNotifier {
     clipStorageLimit = value;
     notifyListeners();
     await SharedPreferencesAsync().setString('clipStorageLimit', value);
+  }
+
+  /// Toggles hands-free voice clip recognition on or off.
+  /// Disabling this stops the speech recognizer when recording, which
+  /// reduces background battery and CPU usage.
+  /// [value] — true to enable voice-triggered clips, false to disable.
+  void setVoiceClipEnabled(bool value) async {
+    voiceClipEnabled = value;
+    notifyListeners();
+    await SharedPreferencesAsync().setBool('voiceClipEnabled', value);
   }
 
   // Audio toggle

@@ -144,6 +144,37 @@ class SettingsList extends StatelessWidget {
             );
           },
         ),
+        // Voice clip toggle: when enabled, saying "clip" while recording
+        // saves a clip without needing to tap the screen.
+        // Disabling it stops the speech recognizer, saving battery and CPU.
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Voice Clip", style: Theme.of(context).textTheme.bodyLarge),
+                  Text(
+                    'Say "clip" while recording to clip. May encounter issues if audio is turned on.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            Switch(
+              value: settingsProvider.voiceClipEnabled,
+              onChanged: (value) {
+                settingsProvider.setVoiceClipEnabled(value);
+                analytics.trackSettingChanged(
+                  settings: settingsProvider,
+                  settingName: 'voice_clip_enabled',
+                  value: value,
+                );
+              },
+            ),
+          ],
+        ),
 
         Divider(),
 
