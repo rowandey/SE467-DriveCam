@@ -199,10 +199,17 @@ class ClipProvider extends ChangeNotifier {
     final thumbnailPath = '${thumbnailsDir.path}/$id.jpg';
     final now = DateTime.now();
 
-    // Re-encode clip to H.264/AAC for maximum compatibility with platform players.
-    await FFmpegKit.execute(
-      '-y -i ${xFile.path} -ss $startSecs -t $actualDuration -c:v libx264 -preset veryfast -crf 23 -c:a aac -b:a 128k $clipPath',
-    );
+    // Stream-copy the clip segment instead of re-encoding.
+    // Trade-off: stream copy snaps the clip start to the nearest keyframe
+    // boundary (typically within 1-2 seconds).
+    await Future.wait([
+      FFmpegKit.execute(
+        '-y -ss $startSecs -i ${xFile.path} -t $actualDuration -c copy $clipPath',
+      ),
+      FFmpegKit.execute(
+        '-y -ss $startSecs -i ${xFile.path} -vframes 1 -q:v 2 $thumbnailPath',
+      ),
+    ]);
 
     // Keep xFile around — it is added to segments so it can be concatenated
     // into the full session recording when recording stops. Pass elapsed so
@@ -213,7 +220,6 @@ class ClipProvider extends ChangeNotifier {
     if (!await File(clipPath).exists()) return;
 
     final fileSize = await File(clipPath).length();
-    await FFmpegKit.execute('-y -i $clipPath -vframes 1 -q:v 2 $thumbnailPath');
 
     await Clip(
       id: id,
@@ -261,15 +267,21 @@ class ClipProvider extends ChangeNotifier {
     final thumbnailPath = '${thumbnailsDir.path}/$id.jpg';
     final now = DateTime.now();
 
-    // Re-encode clip to H.264/AAC for maximum compatibility with platform players.
-    await FFmpegKit.execute(
-      '-y -i ${recording.recordingLocation} -ss $startSeconds -t $duration -c:v libx264 -preset veryfast -crf 23 -c:a aac -b:a 128k $clipPath',
-    );
+    // Stream-copy the clip segment — same approach as _saveClipFromLive.
+    // Both operations read from the source recording file so they run in
+    // parallel; neither blocks the other.
+    await Future.wait([
+      FFmpegKit.execute(
+        '-y -ss $startSeconds -i ${recording.recordingLocation} -t $duration -c copy $clipPath',
+      ),
+      FFmpegKit.execute(
+        '-y -ss $startSeconds -i ${recording.recordingLocation} -vframes 1 -q:v 2 $thumbnailPath',
+      ),
+    ]);
 
     if (!await File(clipPath).exists()) return;
 
     final fileSize = await File(clipPath).length();
-    await FFmpegKit.execute('-y -i $clipPath -vframes 1 -q:v 2 $thumbnailPath');
 
     await Clip(
       id: id,
