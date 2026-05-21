@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(flutter test *)",
+      "Bash(flutter pub *)",
+      "Bash(flutter analyze *)",
+      "Bash(flutter clean *)",
+      "Bash(grep -r \"^void init\\\\|^Future.*init\\\\|initSherpa\\\\|SherpaOnnx.init\\\\|loadLib\\\\|initLib\" \"C:\\\\Users\\\\sasha\\\\AppData\\\\Local\\\\Pub\\\\Cache\\\\hosted\\\\pub.dev\" --include=\"*.dart\" -l 2>&1 | grep sherpa | head -20)",
+      "Read(//c/Users/sasha/AppData/Local/Pub/Cache/hosted/pub.dev/**)",
+      "Bash(dir \"C:\\\\Users\\\\sasha\\\\AppData\\\\Local\\\\Pub\\\\Cache\\\\hosted\\\\pub.dev\")",
+      "Bash(findstr /i sherpa)",
+      "Bash(findstr /i \"sherpa\")"
+    ]
+  }
+}

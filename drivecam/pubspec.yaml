@@ -7,6 +7,7 @@ environment:
   sdk: ^3.10.4
 
 dependencies:
+  amplitude_flutter: ^4.5.0
   camera: ^0.12.0
   flutter:
     sdk: flutter
@@ -25,6 +26,12 @@ dependencies:
   intl: ^0.20.2
   gal: ^2.3.0
   flutter_launcher_icons: ^0.14.0
+  # vosk_flutter provides open-source offline speech recognition via the Vosk
+  # library. No account or API key is required. A grammar-restricted recognizer
+  # listens only for "clip", keeping CPU usage low. The ~40 MB English model is
+  # bundled as a Flutter asset and extracted to local storage on first launch.
+  # See assets/models/SETUP.md for model download instructions.
+  vosk_flutter: ^0.3.48
 
 dev_dependencies:
   flutter_test:
@@ -36,6 +43,15 @@ dev_dependencies:
   # Lets the sqflite-based database tests run in a desktop test environment.
   sqflite_common_ffi: ^2.3.4+4
 
+# vosk_flutter requires permission_handler ^10.2.0, but permission_handler
+# 10.x uses the removed v1 Flutter embedding API on Android. We override it
+# here to force the resolver to use 12.x, which uses v2 embedding. The public
+# permission_handler API (Permission.microphone.request()) did not change
+# between 10 and 12, so vosk_flutter continues to work at runtime.
+dependency_overrides:
+  permission_handler: ^12.0.0
+  permission_handler_android: ^13.0.0
+
 flutter_launcher_icons:
   android: true
   ios: true
@@ -46,3 +62,6 @@ flutter:
   uses-material-design: true
   assets:
     - assets/icons/
+    # Vosk model zip for offline speech recognition.
+    # See assets/models/SETUP.md for download instructions.
+    - assets/models/
