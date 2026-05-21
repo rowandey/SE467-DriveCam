@@ -7,6 +7,8 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:drivecam/analytics/analytics_client.dart';
+import 'package:drivecam/analytics/analytics_controller.dart';
 import 'package:drivecam/provider/clip_provider.dart';
 import 'package:drivecam/provider/recording_provider.dart';
 import 'package:drivecam/provider/settings_provider.dart';
@@ -124,8 +126,12 @@ class _FakeSensorSource implements SensorEventSource {
 /// Spy version of `ClipProvider` that records trigger calls without touching
 /// the file system or video pipeline.
 class _ClipProviderSpy extends ClipProvider {
-  /// Creates the spy around a recording provider.
-  _ClipProviderSpy(super.recordingProvider);
+  /// Creates the spy around the same injected dependencies as ClipProvider.
+  _ClipProviderSpy(
+    super.recordingProvider,
+    super.settingsProvider,
+    super.analyticsController,
+  );
 
   /// Number of times the provider tried to save a live clip.
   int saveCalls = 0;
@@ -159,6 +165,10 @@ class _ClipProviderSpy extends ClipProvider {
   }
 }
 
+/// Builds a no-op analytics controller so provider tests avoid SDK side effects.
+AnalyticsController _makeAnalytics() =>
+    AnalyticsController(const NoopAnalyticsClient());
+
 /// Loads sensor replay samples from a CSV fixture on disk.
 Future<List<_CsvSensorSample>> _loadSamplesFromCsv(String relativePath) async {
   final file = File(relativePath);
@@ -190,6 +200,7 @@ void main() {
   group('SensorProvider CSV fixtures', () {
     late RecordingProvider recordingProvider;
     late SettingsProvider settingsProvider;
+    late AnalyticsController analyticsController;
     late _FakeSensorSource sensorSource;
     late _ClipProviderSpy clipSpy;
     late SensorProvider sensorProvider;
@@ -200,13 +211,20 @@ void main() {
     DateTime now() => baseTime.add(Duration(milliseconds: currentTimeMs));
 
     setUp(() {
-      recordingProvider = RecordingProvider();
-      recordingProvider.isRecording = true;
       settingsProvider = SettingsProvider()
         ..preDurationLength = '5s'
         ..postDurationLength = '0s';
+
+      analyticsController = _makeAnalytics();
+      recordingProvider = RecordingProvider(settingsProvider, analyticsController);
+      recordingProvider.isRecording = true;
+
       sensorSource = _FakeSensorSource();
-      clipSpy = _ClipProviderSpy(recordingProvider);
+      clipSpy = _ClipProviderSpy(
+        recordingProvider,
+        settingsProvider,
+        analyticsController,
+      );
       currentTimeMs = 0;
       sensorProvider = SensorProvider(
         recordingProvider,
