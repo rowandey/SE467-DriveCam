@@ -43,6 +43,15 @@ class _CameraViewState extends State<CameraView> {
     await controller.initialize();
     if (!mounted) return;
     context.read<RecordingProvider>().setCameraController(controller);
+    // Keep the recording snapshot aligned with the controller that is
+    // actually active so the current session uses one stable configuration.
+    context.read<RecordingProvider>().updateSettingsSnapshot(
+      RecordingSettingsSnapshot(
+        quality: quality,
+        framerate: framerate,
+        audioEnabled: audioEnabled,
+      ),
+    );
     _controller = controller;
     _currentQuality = quality;
     _currentFramerate = framerate;
@@ -84,13 +93,6 @@ class _CameraViewState extends State<CameraView> {
   void initState() {
     super.initState();
     final settings = context.read<SettingsProvider>();
-    context.read<RecordingProvider>().updateSettingsSnapshot(
-      RecordingSettingsSnapshot(
-        quality: settings.quality,
-        framerate: settings.framerate,
-        audioEnabled: settings.audioEnabled,
-      ),
-    );
     _initFuture = _initCamera(settings.quality, settings.framerate, settings.audioEnabled);
   }
 
@@ -138,20 +140,16 @@ class _CameraViewState extends State<CameraView> {
     final quality = settingsProvider.quality;
     final framerate = settingsProvider.framerate;
     final audioEnabled = settingsProvider.audioEnabled;
-    context.read<RecordingProvider>().updateSettingsSnapshot(
-      RecordingSettingsSnapshot(
-        quality: quality,
-        framerate: framerate,
-        audioEnabled: audioEnabled,
-      ),
-    );
     final orientation = MediaQuery.of(context).orientation;
+    final recordingProvider = context.read<RecordingProvider>();
+    final isRecording = recordingProvider.isRecording;
 
     final audioChanged =
         _currentAudioEnabled != null && audioEnabled != _currentAudioEnabled;
 
-    // Special case: audio setting changed while actively recording.
-    if (audioChanged && context.read<RecordingProvider>().isRecording) {
+    // Audio is the only recording setting that can safely reinitialize the
+    // controller while a session is active.
+    if (audioChanged && isRecording) {
       _currentAudioEnabled = audioEnabled;
       final oldController = _controller!;
       setState(() {
@@ -166,8 +164,8 @@ class _CameraViewState extends State<CameraView> {
       return;
     }
 
-    // Include audio changes in the general "settings changed" check so a
-    // non-recording reinit picks up the new enableAudio value.
+    // Non-audio recording settings should stay locked to the current session
+    // until the user stops and starts recording again.
     final settingsChanged = _currentQuality != null &&
         (quality != _currentQuality ||
             framerate != _currentFramerate ||
@@ -178,9 +176,8 @@ class _CameraViewState extends State<CameraView> {
 
     // Reinitialize the camera when settings change, or when the device is
     // rotated while not recording.
-    if (settingsChanged ||
-        (orientationChanged &&
-            !context.read<RecordingProvider>().isRecording)) {
+    if ((!isRecording && settingsChanged) ||
+        (orientationChanged && !isRecording)) {
       _controller?.dispose();
       setState(() {
         _controller = null;

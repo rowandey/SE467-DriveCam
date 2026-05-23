@@ -6,6 +6,7 @@
 
 import 'package:drivecam/provider/settings_provider.dart';
 import 'package:drivecam/provider/theme_provider.dart';
+import 'package:drivecam/provider/recording_provider.dart';
 import 'package:drivecam/widgets/settings/setting_dropdown.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -24,6 +25,51 @@ class SettingsList extends StatelessWidget {
   final bool isDark;
   final ThemeProvider themeProvider;
 
+  // Shows a clear warning that the current recording must be stopped and
+  // restarted before a recording-specific setting can take effect.
+  Future<void> _showRecordingRestartDialog(BuildContext context) async {
+    if (!context.mounted) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Restart recording required'),
+        content: const Text(
+          'Stop the current recording, then start a new session to apply this change.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Applies a settings change, tracks it, and warns the user if the change
+  // needs a fresh recording session to take effect.
+  Future<void> _applyRecordingSettingChange({
+    required BuildContext context,
+    required SettingsProvider settingsProvider,
+    required AnalyticsController analytics,
+    required String settingName,
+    required Object value,
+    required VoidCallback applyChange,
+  }) async {
+    applyChange();
+    analytics.trackSettingChanged(
+      settings: settingsProvider,
+      settingName: settingName,
+      value: value,
+    );
+
+    final recordingProvider = context.read<RecordingProvider>();
+    if (recordingProvider.isRecording) {
+      await _showRecordingRestartDialog(context);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final analytics = context.read<AnalyticsController>();
@@ -36,53 +82,53 @@ class SettingsList extends StatelessWidget {
           label: 'Framerate',
           value: settingsProvider.framerate,
           options: SettingsProvider.framerateOptions,
-          onChanged: (value) {
-            settingsProvider.setFramerate(value);
-            analytics.trackSettingChanged(
-              settings: settingsProvider,
-              settingName: 'framerate',
-              value: value,
-            );
-          },
+          onChanged: (value) => _applyRecordingSettingChange(
+            context: context,
+            settingsProvider: settingsProvider,
+            analytics: analytics,
+            settingName: 'framerate',
+            value: value,
+            applyChange: () => settingsProvider.setFramerate(value),
+          ),
         ),
         SettingDropdown(
           label: 'Quality',
           value: settingsProvider.quality,
           options: SettingsProvider.qualityOptions,
-          onChanged: (value) {
-            settingsProvider.setQuality(value);
-            analytics.trackSettingChanged(
-              settings: settingsProvider,
-              settingName: 'quality',
-              value: value,
-            );
-          },
+          onChanged: (value) => _applyRecordingSettingChange(
+            context: context,
+            settingsProvider: settingsProvider,
+            analytics: analytics,
+            settingName: 'quality',
+            value: value,
+            applyChange: () => settingsProvider.setQuality(value),
+          ),
         ),
         SettingDropdown(
           label: 'Rolling Footage Limit',
           value: settingsProvider.footageLimit,
           options: SettingsProvider.footageLimitOptions,
-          onChanged: (value) {
-            settingsProvider.setFootageLimit(value);
-            analytics.trackSettingChanged(
-              settings: settingsProvider,
-              settingName: 'rolling_footage_limit',
-              value: value,
-            );
-          },
+          onChanged: (value) => _applyRecordingSettingChange(
+            context: context,
+            settingsProvider: settingsProvider,
+            analytics: analytics,
+            settingName: 'rolling_footage_limit',
+            value: value,
+            applyChange: () => settingsProvider.setFootageLimit(value),
+          ),
         ),
         SettingDropdown(
           label: 'Footage Storage Limit',
           value: settingsProvider.storageLimit,
           options: SettingsProvider.storageLimitOptions,
-          onChanged: (value) {
-            settingsProvider.setStorageLimit(value);
-            analytics.trackSettingChanged(
-              settings: settingsProvider,
-              settingName: 'footage_storage_limit',
-              value: value,
-            );
-          },
+          onChanged: (value) => _applyRecordingSettingChange(
+            context: context,
+            settingsProvider: settingsProvider,
+            analytics: analytics,
+            settingName: 'footage_storage_limit',
+            value: value,
+            applyChange: () => settingsProvider.setStorageLimit(value),
+          ),
         ),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -109,40 +155,40 @@ class SettingsList extends StatelessWidget {
           label: 'Clip Pre-Duration',
           value: settingsProvider.preDurationLength,
           options: SettingsProvider.clipDurationOptions,
-          onChanged: (value) {
-            settingsProvider.setPreDurationLength(value);
-            analytics.trackSettingChanged(
-              settings: settingsProvider,
-              settingName: 'clip_pre_duration',
-              value: value,
-            );
-          },
+            onChanged: (value) {
+              settingsProvider.setPreDurationLength(value);
+              analytics.trackSettingChanged(
+                settings: settingsProvider,
+                settingName: 'clip_pre_duration',
+                value: value,
+              );
+            },
         ),
         SettingDropdown(
           label: 'Clip Post-Duration',
           value: settingsProvider.postDurationLength,
           options: SettingsProvider.clipDurationOptions,
-          onChanged: (value) {
-            settingsProvider.setPostDurationLength(value);
-            analytics.trackSettingChanged(
-              settings: settingsProvider,
-              settingName: 'clip_post_duration',
-              value: value,
-            );
-          },
+            onChanged: (value) {
+              settingsProvider.setPostDurationLength(value);
+              analytics.trackSettingChanged(
+                settings: settingsProvider,
+                settingName: 'clip_post_duration',
+                value: value,
+              );
+            },
         ),
         SettingDropdown(
           label: 'Clip Storage Limit',
           value: settingsProvider.clipStorageLimit,
           options: SettingsProvider.clipStorageLimitOptions,
-          onChanged: (value) {
-            settingsProvider.setClipStorageLimit(value);
-            analytics.trackSettingChanged(
-              settings: settingsProvider,
-              settingName: 'clip_storage_limit',
-              value: value,
-            );
-          },
+            onChanged: (value) {
+              settingsProvider.setClipStorageLimit(value);
+              analytics.trackSettingChanged(
+                settings: settingsProvider,
+                settingName: 'clip_storage_limit',
+                value: value,
+              );
+            },
         ),
 
         Divider(),
