@@ -1,4 +1,4 @@
-from beamngpy import Scenario, Vehicle, ProceduralCube
+from beamngpy import Scenario, Vehicle
 
 WALL_DISTANCE = 20.0
 

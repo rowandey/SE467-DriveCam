@@ -5,7 +5,6 @@ import csv
 import importlib.util
 import os
 import sys
-import time
 from typing import Dict, Tuple
 
 # BeamNGpy imports are conditional so the script can at least provide a helpful
