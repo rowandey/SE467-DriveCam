@@ -44,6 +44,78 @@ class SettingsProvider extends ChangeNotifier {
     }
   }
 
+  // Derives the video encoder bitrate (bps) from quality + framerate so the
+  // camera controller uses a known, fixed rate rather than a platform default.
+  // A fixed bitrate is required for accurate storage-consumption estimates
+  // elsewhere in the app (bytes = bitrate × seconds ÷ 8).
+  static int videoBitrateForSettings(String quality, String framerate) {
+    final fps = framerateToFps(framerate);
+    switch (quality) {
+      case '480p':
+        if (fps <= 15) return 1000000;   // 1 Mbps
+        if (fps <= 30) return 2000000;   // 2 Mbps
+        return 3500000;                  // 3.5 Mbps @ 60fps
+      case '720p':
+        if (fps <= 15) return 3000000;   // 3 Mbps
+        if (fps <= 30) return 5000000;   // 5 Mbps
+        return 8000000;                  // 8 Mbps @ 60fps
+      case '1080p':
+        if (fps <= 15) return 6000000;   // 6 Mbps
+        if (fps <= 30) return 10000000;  // 10 Mbps
+        return 16000000;                 // 16 Mbps @ 60fps
+      case '4K':
+        if (fps <= 15) return 20000000;  // 20 Mbps
+        if (fps <= 30) return 35000000;  // 35 Mbps
+        return 50000000;                 // 50 Mbps @ 60fps
+      default:
+        return 5000000; // fallback: 720p/30fps equivalent
+    }
+  }
+
+  // Converts a footageLimitOptions string to seconds for rolling-buffer eviction.
+  static int footageLimitToSeconds(String value) {
+    switch (value) {
+      case '30min': return 1800;
+      case '1h':    return 3600;
+      case '1.5h':  return 5400;
+      case '2h':    return 7200;
+      case '3h':    return 10800;
+      case '4h':    return 14400;
+      case '5h':    return 18000;
+      case '6h':    return 21600;
+      default:      return 7200;
+    }
+  }
+
+  // Converts a storageLimitOptions string to bytes (binary gigabytes).
+  static int storageLimitToBytes(String value) {
+    const gb = 1024 * 1024 * 1024;
+    switch (value) {
+      case '1GB':  return 1 * gb;
+      case '2GB':  return 2 * gb;
+      case '4GB':  return 4 * gb;
+      case '8GB':  return 8 * gb;
+      case '12GB': return 12 * gb;
+      case '16GB': return 16 * gb;
+      case '32GB': return 32 * gb;
+      case '64GB': return 64 * gb;
+      default:     return 4 * gb;
+    }
+  }
+
+  // Converts a clipStorageLimitOptions string to bytes (binary gigabytes).
+  static int clipStorageLimitToBytes(String value) {
+    const gb = 1024 * 1024 * 1024;
+    switch (value) {
+      case '1GB': return 1 * gb;
+      case '2GB': return 2 * gb;
+      case '4GB': return 4 * gb;
+      case '6GB': return 6 * gb;
+      case '8GB': return 8 * gb;
+      default:    return 2 * gb;
+    }
+  }
+
   // Recording default settings
   String framerate = framerateOptions[1];
   String quality = qualityOptions[1];
@@ -56,6 +128,9 @@ class SettingsProvider extends ChangeNotifier {
   String preDurationLength = clipDurationOptions[2];
   String postDurationLength = clipDurationOptions[2];
   String clipStorageLimit = clipStorageLimitOptions[1];
+  // Voice clip is enabled by default — users can turn it off in settings
+  // to save battery life when they prefer tap-to-clip instead.
+  bool voiceClipEnabled = true;
 
   // Onboarding
   bool onboardingComplete = false;
@@ -72,6 +147,8 @@ class SettingsProvider extends ChangeNotifier {
     clipStorageLimit = await prefs.getString('clipStorageLimit') ?? clipStorageLimitOptions[1];
     // Default to true so new installs record with audio out of the box.
     audioEnabled = await prefs.getBool('audioEnabled') ?? true;
+    // Default to true — voice clip is on unless the user explicitly disables it.
+    voiceClipEnabled = await prefs.getBool('voiceClipEnabled') ?? true;
     onboardingComplete = await prefs.getBool('onboardingComplete') ?? false;
     analyticsEnabled = await prefs.getBool('analyticsEnabled') ?? false;
     notifyListeners();
@@ -125,6 +202,16 @@ class SettingsProvider extends ChangeNotifier {
     clipStorageLimit = value;
     notifyListeners();
     await SharedPreferencesAsync().setString('clipStorageLimit', value);
+  }
+
+  /// Toggles hands-free voice clip recognition on or off.
+  /// Disabling this stops the speech recognizer when recording, which
+  /// reduces background battery and CPU usage.
+  /// [value] — true to enable voice-triggered clips, false to disable.
+  void setVoiceClipEnabled(bool value) async {
+    voiceClipEnabled = value;
+    notifyListeners();
+    await SharedPreferencesAsync().setBool('voiceClipEnabled', value);
   }
 
   // Audio toggle

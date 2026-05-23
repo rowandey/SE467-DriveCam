@@ -43,6 +43,12 @@
 	</array>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>DriveCam needs access to save clips to your photo library.</string>
+	<!-- Required by the camera plugin to record audio. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>DriveCam uses the microphone to record audio and to listen for voice commands that save clips while recording.</string>
+	<!-- Required by speech_to_text to access the on-device speech recognizer. -->
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>DriveCam uses speech recognition to detect when you say "clip" so you can save footage hands-free while driving.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>

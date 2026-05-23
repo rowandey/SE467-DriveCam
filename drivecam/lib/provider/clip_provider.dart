@@ -1,3 +1,18 @@
+// clip_provider.dart
+// Owns clip saving logic, clip notification state, and clip storage enforcement.
+//
+// Clip storage enforcement (from main branch):
+//   After each clip is saved the provider checks whether the total size of all
+//   stored clips exceeds SettingsProvider.clipStorageLimit. If so it deletes
+//   the oldest clip(s) — FIFO, by date_time ascending — until the total is
+//   back within the limit. This mirrors how RecordingProvider evicts old
+//   recording segments.
+//
+// Analytics (from KPI branch):
+//   Each saved clip fires a trackClipSaved event via AnalyticsController,
+//   recording the clip duration, trigger type, and whether it was taken from
+//   a live recording or a previously saved file.
+
 import 'dart:io';
 
 import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
@@ -10,12 +25,16 @@ import '../analytics/analytics_controller.dart';
 import '../models/clip.dart';
 import '../models/recording.dart';
 import 'recording_provider.dart';
+import 'settings_provider.dart';
 
 class ClipProvider extends ChangeNotifier {
   final RecordingProvider _recordingProvider;
+  final SettingsProvider _settingsProvider;
   final AnalyticsController _analytics;
 
-  ClipProvider(this._recordingProvider, this._analytics);
+  // _settingsProvider is needed to read clipStorageLimit during eviction.
+  // _analytics is needed to track clip save events.
+  ClipProvider(this._recordingProvider, this._settingsProvider, this._analytics);
 
   bool clipSaved = false;
   bool clipInProgress = false;
@@ -23,6 +42,7 @@ class ClipProvider extends ChangeNotifier {
   // Pending clip request to process after recording stops.
   ({int secondsPre, String triggerType})? _pendingClip;
 
+  /// Clears the clip-saved notification flag and notifies listeners.
   void dismissClipNotification() {
     clipSaved = false;
     notifyListeners();
@@ -34,6 +54,8 @@ class ClipProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Starts the post-duration countdown and marks a clip as in progress.
+  /// [postDurationSeconds] sets the countdown end time shown in the UI.
   void startClipProgress(int postDurationSeconds) {
     clipInProgress = true;
     clipSaved = false;
@@ -47,8 +69,40 @@ class ClipProvider extends ChangeNotifier {
     clipProgressEndTime = null;
   }
 
+  /// Enforces the clip storage limit by deleting the oldest clips first.
+  ///
+  /// Loads all clips from the database, sums their sizes, then removes the
+  /// oldest clip (lowest date_time) repeatedly until the total is within
+  /// SettingsProvider.clipStorageLimit. Both the video file and its thumbnail
+  /// are deleted from disk before the DB row is removed.
+  ///
+  /// Exposed without a leading underscore so that unit tests can call it
+  /// directly after seeding the database. Do not call this from production
+  /// code outside of the two save methods below.
+  @visibleForTesting
+  Future<void> enforceClipStorageLimit() async {
+    final limitBytes = SettingsProvider.clipStorageLimitToBytes(
+        _settingsProvider.clipStorageLimit);
+
+    // loadAllClips returns clips ordered date_time DESC (newest first),
+    // so the oldest clip is always at the tail of the list.
+    final clips = await Clip.loadAllClips();
+    var totalBytes = clips.fold<int>(0, (sum, c) => sum + c.clipSize);
+    int fromEnd = clips.length - 1;
+
+    while (totalBytes > limitBytes && fromEnd >= 0) {
+      final oldest = clips[fromEnd];
+      // Delete files from disk; ignore errors if files are already missing.
+      try { await File(oldest.clipLocation).delete(); } catch (_) {}
+      try { await File(oldest.thumbnailLocation).delete(); } catch (_) {}
+      await oldest.deleteClipDB();
+      totalBytes -= oldest.clipSize;
+      fromEnd--;
+    }
+  }
+
   /// Saves a clip of the last N seconds of the active recording.
-  /// secondsPre is how many seconds before the trigger to include; used as
+  /// [secondsPre] is how many seconds before the trigger to include; used as
   /// the fallback clip length when the live recording is no longer available.
   Future<void> saveClipFromLive({
     required int clipDurationSeconds,
@@ -58,9 +112,7 @@ class ClipProvider extends ChangeNotifier {
     if (_recordingProvider.isBusy || !_recordingProvider.isRecording) {
       // Queue for processing: immediately if not busy, or after _saveRecording completes
       _pendingClip = (secondsPre: secondsPre, triggerType: triggerType);
-      if (!_recordingProvider.isBusy) {
-        await processPendingClip();
-      }
+      if (!_recordingProvider.isBusy) await processPendingClip();
       return;
     }
     if (_recordingProvider.controller == null ||
@@ -94,6 +146,7 @@ class ClipProvider extends ChangeNotifier {
   }
 
   /// Saves a clip from the most-recent saved recording between two time frames.
+  /// [startSeconds] and [endSeconds] are offsets into the recording file.
   Future<void> saveClipFromRecording({
     required int startSeconds,
     required int endSeconds,
@@ -146,19 +199,27 @@ class ClipProvider extends ChangeNotifier {
     final thumbnailPath = '${thumbnailsDir.path}/$id.jpg';
     final now = DateTime.now();
 
-    // Re-encode clip to H.264/AAC for maximum compatibility with platform players.
-    await FFmpegKit.execute(
-      '-y -i ${xFile.path} -ss $startSecs -t $actualDuration -c:v libx264 -preset veryfast -crf 23 -c:a aac -b:a 128k $clipPath',
-    );
+    // Stream-copy the clip segment instead of re-encoding.
+    // Trade-off: stream copy snaps the clip start to the nearest keyframe
+    // boundary (typically within 1-2 seconds).
+    await Future.wait([
+      FFmpegKit.execute(
+        '-y -ss $startSecs -i ${xFile.path} -t $actualDuration -c copy $clipPath',
+      ),
+      FFmpegKit.execute(
+        '-y -ss $startSecs -i ${xFile.path} -vframes 1 -q:v 2 $thumbnailPath',
+      ),
+    ]);
 
     // Keep xFile around — it is added to segments so it can be concatenated
-    // into the full session recording when recording stops.
-    _recordingProvider.addSegment(xFile.path);
+    // into the full session recording when recording stops. Pass elapsed so
+    // rolling-buffer eviction in RecordingProvider can correctly account for
+    // this segment's duration and estimated storage.
+    _recordingProvider.addSegment(xFile.path, elapsed);
 
     if (!await File(clipPath).exists()) return;
 
     final fileSize = await File(clipPath).length();
-    await FFmpegKit.execute('-y -i $clipPath -vframes 1 -q:v 2 $thumbnailPath');
 
     await Clip(
       id: id,
@@ -171,11 +232,14 @@ class ClipProvider extends ChangeNotifier {
       clipLocation: clipPath,
       thumbnailLocation: thumbnailPath,
     ).insertClipDB();
+    // Track the clip save event before enforcing the storage limit.
     _analytics.trackClipSaved(
       durationSeconds: actualDuration,
       triggerType: triggerType,
       fromLiveRecording: true,
     );
+    // Remove oldest clip(s) if the total clip storage now exceeds the limit.
+    await enforceClipStorageLimit();
     _clearClipProgress();
     clipSaved = true;
   }
@@ -203,15 +267,21 @@ class ClipProvider extends ChangeNotifier {
     final thumbnailPath = '${thumbnailsDir.path}/$id.jpg';
     final now = DateTime.now();
 
-    // Re-encode clip to H.264/AAC for maximum compatibility with platform players.
-    await FFmpegKit.execute(
-      '-y -i ${recording.recordingLocation} -ss $startSeconds -t $duration -c:v libx264 -preset veryfast -crf 23 -c:a aac -b:a 128k $clipPath',
-    );
+    // Stream-copy the clip segment — same approach as _saveClipFromLive.
+    // Both operations read from the source recording file so they run in
+    // parallel; neither blocks the other.
+    await Future.wait([
+      FFmpegKit.execute(
+        '-y -ss $startSeconds -i ${recording.recordingLocation} -t $duration -c copy $clipPath',
+      ),
+      FFmpegKit.execute(
+        '-y -ss $startSeconds -i ${recording.recordingLocation} -vframes 1 -q:v 2 $thumbnailPath',
+      ),
+    ]);
 
     if (!await File(clipPath).exists()) return;
 
     final fileSize = await File(clipPath).length();
-    await FFmpegKit.execute('-y -i $clipPath -vframes 1 -q:v 2 $thumbnailPath');
 
     await Clip(
       id: id,
@@ -224,11 +294,14 @@ class ClipProvider extends ChangeNotifier {
       clipLocation: clipPath,
       thumbnailLocation: thumbnailPath,
     ).insertClipDB();
+    // Track the clip save event before enforcing the storage limit.
     _analytics.trackClipSaved(
       durationSeconds: duration,
       triggerType: triggerType,
       fromLiveRecording: false,
     );
+    // Remove oldest clip(s) if the total clip storage now exceeds the limit.
+    await enforceClipStorageLimit();
     _clearClipProgress();
     clipSaved = true;
   }

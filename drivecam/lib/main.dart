@@ -8,6 +8,7 @@ import 'package:drivecam/database/database_helper.dart';
 import 'package:drivecam/provider/clip_provider.dart';
 import 'package:drivecam/provider/recording_provider.dart';
 import 'package:drivecam/provider/settings_provider.dart';
+import 'package:drivecam/provider/sensor_provider.dart';
 import 'package:drivecam/provider/theme_provider.dart';
 import 'package:drivecam/screens/main_shell.dart';
 import 'package:flutter/foundation.dart';
@@ -16,7 +17,6 @@ import 'package:provider/provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   final themeProvider = ThemeProvider();
   final settingsProvider = SettingsProvider();
   await Future.wait([
@@ -35,8 +35,11 @@ void main() async {
     settings: settingsProvider,
   );
 
-  final recordingProvider = RecordingProvider(analyticsController);
-  final clipProvider = ClipProvider(recordingProvider, analyticsController);
+  // Pass both settingsProvider (for rolling-buffer eviction) and
+  // analyticsController (for event tracking) to each provider.
+  final recordingProvider = RecordingProvider(settingsProvider, analyticsController);
+  final clipProvider = ClipProvider(recordingProvider, settingsProvider, analyticsController);
+  final sensorProvider = SensorProvider(recordingProvider, clipProvider, settingsProvider);
   recordingProvider.onRecordingSaved = clipProvider.processPendingClip;
 
   runApp(
@@ -47,6 +50,7 @@ void main() async {
         ChangeNotifierProvider.value(value: settingsProvider),
         ChangeNotifierProvider.value(value: recordingProvider),
         ChangeNotifierProvider.value(value: clipProvider),
+        ChangeNotifierProvider.value(value: sensorProvider),
       ],
       child: const MainApp(),
     ),
