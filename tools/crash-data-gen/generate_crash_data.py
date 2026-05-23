@@ -13,13 +13,14 @@ from typing import Dict, Tuple
 try:
     from beamngpy import BeamNGpy, Scenario, Vehicle, ProceduralCube
     from beamngpy.sensors import AdvancedIMU, Timer
-except Exception:  # pragma: no cover - runtime dependency
+except ImportError:  # pragma: no cover - runtime dependency
     print("Imports failed")
     BeamNGpy = None  # type: ignore
     Scenario = None  # type: ignore
     Vehicle = None  # type: ignore
     ProceduralCube = None  # type: ignore
     AdvancedIMU = None  # type: ignore
+    Timer = None
 
 
 def _parse_args() -> argparse.Namespace:
@@ -44,7 +45,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--scenario",
         required=True,
-        help="Scenario script path. Scenario scripts must define `create_scenario` and `step_scenario` functions.",
+        help="Scenario script path. Scenario scripts must define `create_scenario`, `setup_scenario`, and `step_scenario` functions.",
     )
     parser.add_argument(
         "--duration",
@@ -55,7 +56,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--sample-rate",
         type=float,
-        default=100.0,
+        default=50.0,
         help="Sensor sample rate in Hz",
     )
     parser.add_argument(
@@ -63,6 +64,12 @@ def _parse_args() -> argparse.Namespace:
         type=float,
         default=0.8,
         help="Throttle strength applied to the vehicle (0.0 to 1.0)",
+    )
+    parser.add_argument(
+        "--headless",
+        action='store_true',
+        default=False,
+        help="Disables graphics for faster execution."
     )
     return parser.parse_args()
 
@@ -80,7 +87,7 @@ def _connect_to_beamng(beamng_home: str) -> BeamNGpy:
             "BeamNGpy imports failed. Ensure beamngpy is installed and available."
         )
 
-    bng = BeamNGpy('localhost', 64256, home=beamng_home)
+    bng = BeamNGpy('localhost', 64256, home=beamng_home, headless=args.headless)
 
     return bng
 
@@ -276,7 +283,7 @@ def run_simulation(sim_args: argparse.Namespace) -> None:
     scenario, vehicles = scenario_module.create_scenario()
 
     print('Launching BeamNG (this may take a few seconds)...')
-    bng.open(opts='-gfx vk')
+    bng.open()
 
     print('Writing header to', sim_args.output)
     _write_csv_header(sim_args.output)
@@ -286,14 +293,17 @@ def run_simulation(sim_args: argparse.Namespace) -> None:
         bng.load_scenario(scenario)
         bng.start_scenario()
 
+        bng.pause()
+        bng.settings.set_deterministic(args.sample_rate)
+
         imu, _timer = _attach_sensors(bng, vehicles[0])
 
-        # Disable the AI so the vehicles stay under direct control.
-        for vehicle in vehicles:
-            vehicle.ai_set_mode('disabled')
+        # Step once to ensure sensors are initialized
+        bng.step(1)
 
-        # Let the physics settle before sampling begins.
-        time.sleep(0.2)
+        scenario_module.setup_scenario(scenario, vehicles, bng)
+
+        bng.resume()
 
         # Set up data export timing from BeamNG simulation time.
         start_time = _read_simulation_time(vehicles[0])
@@ -305,7 +315,9 @@ def run_simulation(sim_args: argparse.Namespace) -> None:
         while elapsed < sim_args.duration:
             # Step the sim forward one frame. This keeps the physics and sensor
             # updates in sync with the replay data we want to capture.
-            bng.step(1)
+            # bng.step(1)
+
+            print(f"Sim time: {elapsed:.2f}s / {sim_args.duration:.2f}s")
 
             scenario_module.step_scenario(scenario, vehicles, bng, sim_args.throttle_strength)
 
@@ -326,10 +338,7 @@ def run_simulation(sim_args: argparse.Namespace) -> None:
         print('Simulation finished; closing BeamNG...')
 
     finally:
-        try:
-            bng.close()
-        except Exception:
-            pass
+        bng.close()
 
 
 if __name__ == '__main__':

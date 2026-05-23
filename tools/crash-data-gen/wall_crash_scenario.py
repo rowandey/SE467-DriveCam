@@ -25,10 +25,15 @@ def create_scenario():
     # Keep the vehicle at the origin and let it drive forward into the wall.
     # In the current setup this is simpler than trying to manually rotate the
     # car, and it makes the script easier for students to tweak.
-    vehicles = [Vehicle('vA', model=model, licence='A')]
-    scenario.add_vehicle(vehicles[0], pos=(0.0, 0.0, 0.0), rot_quat=(0, 0, 0, 1))
+    vehicle = Vehicle('vA', model=model, licence='A')
+    scenario.add_vehicle(vehicle, pos=(0.0, 0.0, 0.0), rot_quat=(0, 0, 0, 1))
 
-    return scenario, vehicles
+    return scenario, (vehicle,)
+
+
+def setup_scenario(scenario, vehicles, bng):
+    for vehicle in vehicles:
+        vehicle.ai_set_mode('disabled')
 
 
 def step_scenario(scenario, vehicles, bng, throttle_strength):
