@@ -6,7 +6,7 @@ def create_scenario():
     # Create a simple scenario using a standard map. 'smallgrid' is a small
     # empty grid map suitable for testing. If this map is not available in
     # your BeamNG installation, try 'italy' or 'east_coast_usa'.
-    scenario = Scenario('smallgrid', 'drivecam_crash_test')
+    scenario = Scenario('smallgrid', 'drivecam_head-on_crash_test')
 
     # Select a stable, common vehicle model. You can change this to any
     # model available in your BeamNG build.
