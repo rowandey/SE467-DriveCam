@@ -173,6 +173,6 @@ SQLite database tracks clip metadata and the most recent recording. See
 ## Copyright Notices
 
 This work includes data generated with the software BeamNG.tech by BeamNG GmbH, [www.beamng.gmbh](https://www.beamng.gmbh/).
-This data includes the crash test data files found in [`drivecam/test/fixtures/crash`](drivecam/test/fixtures/crash), and the 'quiet' test data files marked with `beamng` in the name found in [`drivecam/test/fixtures/quiet`](`drivecam/test/fixtures/quiet`).
+This data includes the crash test data files found in [`drivecam/test/fixtures/crash`](drivecam/test/fixtures/crash), and the 'quiet' test data files marked with `beamng` in the name found in [`drivecam/test/fixtures/quiet`](drivecam/test/fixtures/quiet).
 This data is governed by the [BeamNG.tech Database License](https://beamng.tech/policies/database-licensing/).
 
