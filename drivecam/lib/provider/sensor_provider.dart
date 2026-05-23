@@ -35,7 +35,7 @@ class SensorProvider extends ChangeNotifier {
   double accelWeight = 1.0;
   double gyroWeight = 0.5;
   double metricThreshold = 12.0; // Combined metric threshold
-  int debounceMs = 100; // Require metric > threshold for this duration
+  int debounceMs = 40; // Require metric > threshold for this duration
   int cooldownMs = 10000; // Minimum ms between triggers
 
   // Internal state
