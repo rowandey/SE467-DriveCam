@@ -98,14 +98,15 @@ flutter build apk
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| UI Framework | [Flutter](https://flutter.dev/) (Dart) |
-| State Management | Provider pattern (`ChangeNotifier`) |
-| Video Recording | `camera` plugin + `ffmpeg_kit_flutter_new` |
-| Local Storage | SQLite via `sqflite` |
-| User Preferences | `shared_preferences` |
-| Video Playback | `video_player` |
+| Layer                      | Technology                                 |
+|----------------------------|--------------------------------------------|
+| UI Framework               | [Flutter](https://flutter.dev/) (Dart)     |
+| State Management           | Provider pattern (`ChangeNotifier`)        |
+| Video Recording            | `camera` plugin + `ffmpeg_kit_flutter_new` |
+| Local Storage              | SQLite via `sqflite`                       |
+| User Preferences           | `shared_preferences`                       |
+| Video Playback             | `video_player`                             |
+| Crash test data generation | [BeamNG.tech](https://beamng.tech/)        |
 
 ---
 
@@ -168,3 +169,10 @@ SQLite database tracks clip metadata and the most recent recording. See
 | Secondary Color | `#4AB9E7` (light blue) |
 | Light Accent | `#FFFFFF` |
 | Dark Accent | `#1A1A1A` |
+
+## Copyright Notices
+
+This work includes data generated with the software BeamNG.tech by BeamNG GmbH, [www.beamng.gmbh](https://www.beamng.gmbh/).
+This data includes the crash test data files found in [`drivecam/test/fixtures/crash`](drivecam/test/fixtures/crash), and the 'quiet' test data files marked with `beamng` in the name found in [`drivecam/test/fixtures/quiet`](`drivecam/test/fixtures/quiet`).
+This data is governed by the [BeamNG.tech Database License](https://beamng.tech/policies/database-licensing/).
+
