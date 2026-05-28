@@ -247,7 +247,7 @@ void main() {
     final quietDir = Directory('test/fixtures/quiet');
 
     // Helper to collect CSV files from a directory.
-    List<File> _collectCsv(Directory d) {
+    List<File> collectCsv(Directory d) {
       return d.existsSync()
           ? d
               .listSync()
@@ -257,8 +257,8 @@ void main() {
           : <File>[];
     }
 
-    final crashFiles = _collectCsv(crashDir);
-    final quietFiles = _collectCsv(quietDir);
+    final crashFiles = collectCsv(crashDir);
+    final quietFiles = collectCsv(quietDir);
 
     for (final file in crashFiles) {
       final filename = file.path.split(Platform.pathSeparator).last;

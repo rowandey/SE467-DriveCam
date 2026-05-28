@@ -42,8 +42,10 @@ class SensorService implements SensorEventSource {
   final StreamController<GyroscopeEvent> _gyroController =
       StreamController<GyroscopeEvent>.broadcast();
 
+  @override
   Stream<UserAccelerometerEvent> get userAccelerometerStream =>
       _accelController.stream;
+  @override
   Stream<GyroscopeEvent> get gyroscopeStream => _gyroController.stream;
 
   StreamSubscription<UserAccelerometerEvent>? _accelSub;
@@ -54,6 +56,7 @@ class SensorService implements SensorEventSource {
 
   /// Starts listening to the platform sensor streams and forwards events to
   /// the broadcast streams. If already started this is a no-op.
+  @override
   void start() {
     if (_accelSub != null || _gyroSub != null) return;
 
@@ -79,6 +82,7 @@ class SensorService implements SensorEventSource {
 
   /// Stops listening to the platform streams and closes current subscriptions.
   /// Does not close the broadcast controllers so consumers can re-subscribe.
+  @override
   void stop() {
     _accelSub?.cancel();
     _accelSub = null;

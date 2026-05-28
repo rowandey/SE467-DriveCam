@@ -23,11 +23,12 @@ void main() {
     'shows a restart warning when a recording setting changes mid-session',
     (tester) async {
       final settingsProvider = SettingsProvider();
+      final analyticsController = AnalyticsController(const NoopAnalyticsClient());
       final recordingProvider = RecordingProvider(
-        AnalyticsController(const NoopAnalyticsClient()),
+        settingsProvider,
+        analyticsController,
       )..isRecording = true;
       final themeProvider = ThemeProvider();
-      final analyticsController = AnalyticsController(const NoopAnalyticsClient());
 
       await tester.pumpWidget(
         MultiProvider(
@@ -67,11 +68,12 @@ void main() {
 
   testWidgets('audio changes do not show the restart warning', (tester) async {
     final settingsProvider = SettingsProvider();
+    final analyticsController = AnalyticsController(const NoopAnalyticsClient());
     final recordingProvider = RecordingProvider(
-      AnalyticsController(const NoopAnalyticsClient()),
+      settingsProvider,
+      analyticsController,
     )..isRecording = true;
     final themeProvider = ThemeProvider();
-    final analyticsController = AnalyticsController(const NoopAnalyticsClient());
 
     await tester.pumpWidget(
       MultiProvider(

@@ -260,15 +260,6 @@ class _CameraViewState extends State<CameraView> {
     await controller.initialize();
     if (!mounted) return;
     context.read<RecordingProvider>().setCameraController(controller);
-    // Keep the recording snapshot aligned with the controller that is
-    // actually active so the current session uses one stable configuration.
-    context.read<RecordingProvider>().updateSettingsSnapshot(
-      RecordingSettingsSnapshot(
-        quality: quality,
-        framerate: framerate,
-        audioEnabled: audioEnabled,
-      ),
-    );
     // Cache the provider reference so dispose() can clean up onFlushRequested
     // without needing a valid BuildContext.
     _recordingProvider = context.read<RecordingProvider>();
