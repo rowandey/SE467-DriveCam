@@ -84,6 +84,7 @@ class _FootageEditorState extends State<FootageEditor> {
     }
 
     setState(() => _saving = true);
+    final clipProvider = context.read<ClipProvider>();
 
     try {
       // Create clip inside app storage and register in DB (do NOT export to
@@ -136,8 +137,7 @@ class _FootageEditorState extends State<FootageEditor> {
 
       // Notify ClipProvider so UI updates (clip list / notifications)
       try {
-        final cp = Provider.of<ClipProvider>(context, listen: false);
-        cp.markClipSaved();
+        clipProvider.markClipSaved();
       } catch (_) {}
 
       if (mounted) {

@@ -127,10 +127,12 @@ class _FootageViewerState extends State<FootageViewer> {
     );
     try {
       final hasAccess = await Gal.hasAccess();
+      if (!context.mounted) return;
       if (!hasAccess) {
         await Gal.requestAccess();
+        if (!context.mounted) return;
         if (!await Gal.hasAccess()) {
-          if (!mounted) return;
+          if (!context.mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Gallery access denied')),
           );
@@ -139,12 +141,12 @@ class _FootageViewerState extends State<FootageViewer> {
       }
 
       await Gal.putVideo(_filePath!);
-      if (!mounted) return;
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Saved to gallery')),
       );
     } catch (e) {
-      if (!mounted) return;
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Export failed: $e')),
       );
