@@ -24,6 +24,11 @@ import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
+// wakelock_plus keeps the display on while a recording is active.
+// WakelockPlus.enable() and .disable() wrap the native platform APIs:
+//   Android → WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+//   iOS     → UIApplication.shared.isIdleTimerDisabled
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../analytics/analytics_controller.dart';
 import '../models/recording.dart';
@@ -195,6 +200,10 @@ class RecordingProvider extends ChangeNotifier {
         final now = DateTime.now();
         _recordingStartTime = now;
         _segmentStartTime = now;
+        // Prevent the screen from dimming or locking while a recording is live.
+        // This is important for a dashcam — losing the screen lock during a drive
+        // would also freeze the camera preview on some devices.
+        await WakelockPlus.enable();
         // Begin periodic flushes so rolling-buffer limits are enforced even
         // when no clips are saved and no settings changes occur.
         _startFlushTimer();
@@ -208,10 +217,16 @@ class RecordingProvider extends ChangeNotifier {
       } else {
         // Stop the flush timer before saving so it can't fire mid-save.
         _stopFlushTimer();
+        // Release the wakelock before the (potentially slow) save operation so
+        // normal OS sleep behaviour resumes as soon as the user stops recording.
+        await WakelockPlus.disable();
         await _saveRecording();
       }
     } catch (e) {
       isRecording = !isRecording;
+      // If anything went wrong, make sure the wakelock is released so the device
+      // can sleep normally — a dangling lock would drain the battery silently.
+      await WakelockPlus.disable();
       notifyListeners();
       debugPrint('Recording toggle failed: $e');
     } finally {
