@@ -9,8 +9,12 @@ import 'package:shared_preferences_platform_interface/shared_preferences_async_p
 
 void main() {
   late ThemeProvider themeProvider;
+  late int notifyCount;
+
   setUp(() {
     themeProvider = ThemeProvider();
+    notifyCount = 0;
+    themeProvider.addListener(() => notifyCount++);
   });
 
   group('ThemeProvider.setDarkMode', () {
@@ -20,21 +24,23 @@ void main() {
             'darkMode': false,
           });
 
-      themeProvider.setDarkMode(true);
+      await themeProvider.setDarkMode(true);
 
+      expect(notifyCount, 1);
       expect(themeProvider.themeMode, ThemeMode.dark);
       final prefs = SharedPreferencesAsyncPlatform.instance;
       expect(await prefs!.getBool('darkMode', SharedPreferencesOptions()), true);
     });
 
-    test('sets theme to light and saves preference', () async {
+    test('sets theme to light, saves preference, and notifies listeners', () async {
       SharedPreferencesAsyncPlatform.instance =
           InMemorySharedPreferencesAsync.withData({
             'darkMode': true,
           });
 
-      themeProvider.setDarkMode(false);
+      await themeProvider.setDarkMode(false);
 
+      expect(notifyCount, 1);
       expect(themeProvider.themeMode, ThemeMode.light);
       final prefs = SharedPreferencesAsyncPlatform.instance;
       expect(await prefs!.getBool('darkMode', SharedPreferencesOptions()), false);
