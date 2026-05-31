@@ -32,6 +32,7 @@ dependencies:
   # bundled as a Flutter asset and extracted to local storage on first launch.
   # See assets/models/SETUP.md for model download instructions.
   vosk_flutter: ^0.3.48
+  wakelock_plus: ^1.0.0
 
 dev_dependencies:
   flutter_test:
