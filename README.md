@@ -136,7 +136,8 @@ flutter run
 
 ```bash
 flutter analyze        # Run the linter (uses flutter_lints)
-flutter test           # Run unit tests
+dart run build_runner build --delete-conflicting-outputs  # Generate mocks for testing
+flutter test           # Run unit tests (requires that build_runner has been run at least once to generate mocks)
 flutter build apk      # Build an Android APK
 flutter build ios      # Build for iOS (requires macOS + Xcode)
 ```
