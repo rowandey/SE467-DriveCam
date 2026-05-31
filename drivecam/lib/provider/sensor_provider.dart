@@ -137,6 +137,7 @@ class SensorProvider extends ChangeNotifier {
 
   /// Converts the current sensor state into a clip request using the same pre
   /// and post duration settings that the manual recording flow already uses.
+  @visibleForTesting
   void onTrigger() {
     // Use settings provider durations (pre + post) to match manual behavior
     final secondsPre = SettingsProvider.clipDurationToSeconds(
