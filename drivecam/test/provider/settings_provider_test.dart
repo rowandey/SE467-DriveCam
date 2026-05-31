@@ -356,6 +356,12 @@ void main() {
       expect(notifyCount, 1);
     });
 
+    test('setVoiceClipEnabled updates state and notifies', () {
+      settings.setVoiceClipEnabled(true);
+      expect(settings.voiceClipEnabled, isTrue);
+      expect(notifyCount, 1);
+    });
+
     test('setAudioEnabled to false updates state and notifies', () {
       settings.setAudioEnabled(false);
       expect(settings.audioEnabled, isFalse);
