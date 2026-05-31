@@ -1,17 +1,23 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/annotations.dart';
+import 'package:mockito/mockito.dart';
+
 import 'package:drivecam/analytics/analytics_client.dart';
 import 'package:drivecam/analytics/analytics_controller.dart';
 import 'package:drivecam/provider/clip_provider.dart';
 import 'package:drivecam/provider/recording_provider.dart';
 import 'package:drivecam/provider/settings_provider.dart';
-import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 
+@GenerateNiceMocks([MockSpec<RecordingProvider>()])
+@GenerateNiceMocks([MockSpec<SettingsProvider>()])
+@GenerateNiceMocks([MockSpec<AnalyticsController>()])
+import 'clip_provider_unit_test.mocks.dart';
+
 void main() {
-  setUp(() {
-    SharedPreferencesAsyncPlatform.instance =
-        InMemorySharedPreferencesAsync.empty();
-  });
+  late MockRecordingProvider recording;
+  late ClipProvider provider;
 
   // Helper that returns a freshly wired provider trio for tests.
   ClipProvider makeProvider({
@@ -25,11 +31,15 @@ void main() {
     return ClipProvider(r, s, a);
   }
 
+  setUp(() {
+    SharedPreferencesAsyncPlatform.instance =
+        InMemorySharedPreferencesAsync.empty();
+
+    recording = MockRecordingProvider();
+    provider = makeProvider(settings: MockSettingsProvider(), analytics: MockAnalyticsController(), recording: recording);
+  });
+
   test('markClipSaved and dismissClipNotification toggle flags and notify', () {
-    final settings = SettingsProvider();
-    final analytics = AnalyticsController(const NoopAnalyticsClient());
-    final recording = RecordingProvider(settings, analytics);
-    final provider = makeProvider(settings: settings, analytics: analytics, recording: recording);
     var notifications = 0;
     provider.addListener(() => notifications++);
 
@@ -45,11 +55,6 @@ void main() {
   });
 
   test('startClipProgress sets progress state and end time', () {
-    final settings = SettingsProvider();
-    final analytics = AnalyticsController(const NoopAnalyticsClient());
-    final recording = RecordingProvider(settings, analytics);
-    final provider = makeProvider(settings: settings, analytics: analytics, recording: recording);
-
     final before = DateTime.now();
     provider.startClipProgress(3);
     final after = DateTime.now();
@@ -65,37 +70,29 @@ void main() {
   });
 
   test('saveClipFromRecording returns early when recording is active or busy', () async {
-    final settings = SettingsProvider();
-    final analytics = AnalyticsController(const NoopAnalyticsClient());
-    final recording = RecordingProvider(settings, analytics);
-    final provider = makeProvider(settings: settings, analytics: analytics, recording: recording);
-
     // If recording is active the method must return without throwing and
     // clipSaved must remain false.
-    recording.isRecording = true;
+    when(recording.isRecording).thenReturn(true);
     await provider.saveClipFromRecording(startSeconds: 0, endSeconds: 1);
     expect(provider.clipSaved, isFalse);
 
     // If busy the method must also return early.
-    recording.isRecording = false;
-    recording.lockBusy();
+    when(recording.isRecording).thenReturn(false);
+    when(recording.isBusy).thenReturn(true);
     try {
       await provider.saveClipFromRecording(startSeconds: 0, endSeconds: 1);
       expect(provider.clipSaved, isFalse);
     } finally {
-      recording.unlockBusy();
+      when(recording.isBusy).thenReturn(false);
     }
   });
 
   test('saveClipFromLive exits early when controller is missing or not initialized', () async {
-    final settings = SettingsProvider();
-    final analytics = AnalyticsController(const NoopAnalyticsClient());
-    final recording = RecordingProvider(settings, analytics);
-    final provider = makeProvider(settings: settings, analytics: analytics, recording: recording);
-
     // Ensure recording is true but no controller has been set — method should
     // return early without throwing and leave clipSaved false.
-    recording.isRecording = true;
+    when(recording.isRecording).thenReturn(true);
+    when(recording.controller).thenReturn(null);
+
 
     await provider.saveClipFromLive(clipDurationSeconds: 5, secondsPre: 2);
     expect(provider.clipSaved, isFalse);
