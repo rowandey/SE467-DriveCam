@@ -16,7 +16,6 @@
 import 'package:flutter/material.dart';
 
 import '../analytics/analytics_controller.dart';
-import '../models/recording.dart';
 import 'recording_provider.dart';
 import 'settings_provider.dart';
 import '../utils/clip_saver.dart';
