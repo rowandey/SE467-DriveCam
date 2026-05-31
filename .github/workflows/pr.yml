@@ -49,6 +49,9 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+      - name: Generate test mocks
+        run: dart run build_runner build --delete-conflicting-outputs
+
       # Run Flutter tests
       - name: Run tests
         run: flutter test -r expanded > test-results.json || true

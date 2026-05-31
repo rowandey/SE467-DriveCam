@@ -54,4 +54,5 @@ app.*.map.json
 /macos/Podfile
 
 
-
+# Mockito related
+*.mocks.dart

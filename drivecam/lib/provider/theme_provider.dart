@@ -42,13 +42,13 @@ class ThemeProvider extends ChangeNotifier {
     final prefs = SharedPreferencesAsync();
     bool? mode = await prefs.getBool("darkMode");
     if (mode != null) {
-      setDarkMode(mode);
+      await setDarkMode(mode);
     }
   }
 
   // Updates the app ThemeMode and persists the preference.
   // [mode] true enables dark mode, false enables light mode.
-  void setDarkMode(bool mode) async {
+  Future<void> setDarkMode(bool mode) async {
     themeMode = mode ? ThemeMode.dark : ThemeMode.light;
     notifyListeners();
 

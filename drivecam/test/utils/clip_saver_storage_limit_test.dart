@@ -1,26 +1,21 @@
-// Tests for ClipProvider's clip storage limit enforcement.
+// Tests for ClipSaver's clip storage limit enforcement.
 //
 // These tests exercise the eviction logic that fires after every clip save.
 // They use the FFI SQLite backend + an in-memory database so no camera or
 // FFmpeg is needed — the eviction method is called directly after seeding the
 // database through the model layer.
 //
-// Design note: ClipProvider.enforceClipStorageLimit() is annotated
+// Design note: ClipSaver.enforceClipStorageLimit() is annotated
 // @visibleForTesting so it can be called here independently from the full
-// clip-save pipeline (which would require a live camera and FFmpeg). This is
-// the same approach used by recording_provider_test.dart, which calls
-// addSegment() to trigger eviction without a real camera.
+// clip-save pipeline (which would require a live camera and FFmpeg).
 
 import 'dart:io';
 
-import 'package:drivecam/analytics/analytics_client.dart';
-import 'package:drivecam/analytics/analytics_controller.dart';
 import 'package:drivecam/database/database_helper.dart';
 import 'package:drivecam/database/queries.dart';
 import 'package:drivecam/models/clip.dart';
-import 'package:drivecam/provider/clip_provider.dart';
-import 'package:drivecam/provider/recording_provider.dart';
 import 'package:drivecam/provider/settings_provider.dart';
+import 'package:drivecam/utils/clip_saver.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
@@ -64,19 +59,14 @@ void main() {
     await db.close();
   });
 
-  /// Builds a [ClipProvider] with [clipStorageLimit] set to the given option
-  /// string (must be one of clipStorageLimitOptions, e.g. '1GB').
-  /// Both the [RecordingProvider] and [SettingsProvider] are created fresh so
-  /// each test starts from a clean state.
-  ClipProvider makeProvider({required String clipStorageLimit}) {
+  /// Builds a [SettingsProvider] with [clipStorageLimit] set to the given
+  /// option string (must be one of clipStorageLimitOptions, e.g. '1GB').
+  /// Tests pass this settings object into [ClipSaver.enforceClipStorageLimit].
+  SettingsProvider makeSettings({required String clipStorageLimit}) {
     final settings = SettingsProvider();
     // Set the field directly to avoid async SharedPreferences calls.
     settings.clipStorageLimit = clipStorageLimit;
-    // NoopAnalyticsClient.isConfigured returns false, so canTrack is always
-    // false — no events are ever sent to Amplitude during tests.
-    final analytics = AnalyticsController(const NoopAnalyticsClient());
-    final recording = RecordingProvider(settings, analytics);
-    return ClipProvider(recording, settings, analytics);
+    return settings;
   }
 
   /// Inserts a clip row directly into the test database.
@@ -115,8 +105,8 @@ void main() {
     await insertTestClip(id: 'clip-a', dateTime: '2026-01-01T10:00:00.000Z', clipSize: mb200);
     await insertTestClip(id: 'clip-b', dateTime: '2026-01-02T10:00:00.000Z', clipSize: mb200);
 
-    final provider = makeProvider(clipStorageLimit: '1GB');
-    await provider.enforceClipStorageLimit();
+    final settings = makeSettings(clipStorageLimit: '1GB');
+    await ClipSaver.enforceClipStorageLimit(settings);
 
     final remaining = await Clip.loadAllClips();
     // Both clips are under the 1 GB limit — neither should be deleted.
@@ -135,8 +125,8 @@ void main() {
     await insertTestClip(id: 'clip-old', dateTime: '2026-01-01T10:00:00.000Z', clipSize: mb600);
     await insertTestClip(id: 'clip-new', dateTime: '2026-01-02T10:00:00.000Z', clipSize: mb600);
 
-    final provider = makeProvider(clipStorageLimit: '1GB');
-    await provider.enforceClipStorageLimit();
+    final settings = makeSettings(clipStorageLimit: '1GB');
+    await ClipSaver.enforceClipStorageLimit(settings);
 
     final remaining = await Clip.loadAllClips();
     expect(remaining, hasLength(1));
@@ -159,8 +149,8 @@ void main() {
     await insertTestClip(id: 'clip-2', dateTime: '2026-01-02T10:00:00.000Z', clipSize: mb600);
     await insertTestClip(id: 'clip-3', dateTime: '2026-01-03T10:00:00.000Z', clipSize: mb600);
 
-    final provider = makeProvider(clipStorageLimit: '1GB');
-    await provider.enforceClipStorageLimit();
+    final settings = makeSettings(clipStorageLimit: '1GB');
+    await ClipSaver.enforceClipStorageLimit(settings);
 
     final remaining = await Clip.loadAllClips();
     // Two oldest clips are removed; only the newest survives.
@@ -183,8 +173,8 @@ void main() {
     await insertTestClip(id: 'clip-b', dateTime: '2026-01-02T08:00:00.000Z', clipSize: mb400);
     await insertTestClip(id: 'clip-c', dateTime: '2026-01-03T08:00:00.000Z', clipSize: mb400);
 
-    final provider = makeProvider(clipStorageLimit: '1GB');
-    await provider.enforceClipStorageLimit();
+    final settings = makeSettings(clipStorageLimit: '1GB');
+    await ClipSaver.enforceClipStorageLimit(settings);
 
     final remaining = await Clip.loadAllClips();
     expect(remaining, hasLength(2));
@@ -226,8 +216,8 @@ void main() {
         clipSize: mb600,
       );
 
-      final provider = makeProvider(clipStorageLimit: '1GB');
-      await provider.enforceClipStorageLimit();
+      final settings = makeSettings(clipStorageLimit: '1GB');
+      await ClipSaver.enforceClipStorageLimit(settings);
 
       // clip-old is evicted — both its files must no longer exist on disk.
       expect(videoFile.existsSync(), isFalse,
@@ -262,11 +252,11 @@ void main() {
       clipSize: mb600,
     );
 
-    final provider = makeProvider(clipStorageLimit: '1GB');
+    final settings = makeSettings(clipStorageLimit: '1GB');
 
     // The call must complete normally — missing files must not throw.
     await expectLater(
-      provider.enforceClipStorageLimit(),
+      ClipSaver.enforceClipStorageLimit(settings),
       completes,
     );
 
@@ -302,8 +292,8 @@ void main() {
       clipSize: mb200,
     );
 
-    final provider = makeProvider(clipStorageLimit: '1GB');
-    await provider.enforceClipStorageLimit();
+    final settings = makeSettings(clipStorageLimit: '1GB');
+    await ClipSaver.enforceClipStorageLimit(settings);
 
     // The old large clip must be evicted; the newly saved small clip survives.
     final remaining = await Clip.loadAllClips();
@@ -316,9 +306,9 @@ void main() {
   // ===========================================================================
 
   test('does not throw when the clips table is empty', () async {
-    final provider = makeProvider(clipStorageLimit: '1GB');
+    final settings = makeSettings(clipStorageLimit: '1GB');
 
-    await expectLater(provider.enforceClipStorageLimit(), completes);
+    await expectLater(ClipSaver.enforceClipStorageLimit(settings), completes);
 
     final remaining = await Clip.loadAllClips();
     expect(remaining, isEmpty);

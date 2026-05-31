@@ -127,7 +127,7 @@ class SensorProvider extends ChangeNotifier {
         // Trigger and reset state
         _lastTrigger = now;
         _candidateStart = null;
-        _onTrigger();
+        onTrigger();
       }
     } else {
       // Reset candidate if metric falls back below threshold
@@ -137,7 +137,8 @@ class SensorProvider extends ChangeNotifier {
 
   /// Converts the current sensor state into a clip request using the same pre
   /// and post duration settings that the manual recording flow already uses.
-  void _onTrigger() {
+  @visibleForTesting
+  void onTrigger() {
     // Use settings provider durations (pre + post) to match manual behavior
     final secondsPre = SettingsProvider.clipDurationToSeconds(
       _settingsProvider.preDurationLength,
