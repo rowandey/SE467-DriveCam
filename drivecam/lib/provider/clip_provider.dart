@@ -85,7 +85,7 @@ class ClipProvider extends ChangeNotifier {
     }
     _recordingProvider.lockBusy();
     try {
-      await _clipSaver.saveClipFromLive(clipDurationSeconds, triggerType, _recordingProvider, _analytics, _settingsProvider);
+      clipSaved = await _clipSaver.saveClipFromLive(clipDurationSeconds, triggerType, _recordingProvider, _analytics, _settingsProvider);
       _clearClipProgress();
       notifyListeners();
     } catch (e) {

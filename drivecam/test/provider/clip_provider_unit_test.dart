@@ -1,4 +1,5 @@
 import 'package:camera/camera.dart';
+import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
@@ -120,6 +121,36 @@ void main() {
       expect(provider.clipSaved, isTrue);
       expect(notifyCount, 1);
       verify(clipSaver.saveClipFromRecording(any, any, any, any, any));
+      verify(recording.lockBusy()).called(1);
+      verify(recording.unlockBusy()).called(1);
+    });
+
+    test('prints to debug when saving fails', () async {
+      when(recording.isRecording).thenReturn(false);
+      when(recording.isBusy).thenReturn(false);
+
+      // Assume the clip saver successfully saves the clip
+      when(clipSaver.saveClipFromRecording(any, any, any, any, any)).thenThrow(Error());
+
+      // Capture debugPrint output by intercepting print calls in a Zone.
+      final debugOutput = <String>[];
+      await Zone.current.fork(
+        specification: ZoneSpecification(
+          print: (self, parent, zone, line) {
+            debugOutput.add(line);
+            parent.print(zone, line);
+          },
+        ),
+      ).run(() async {
+        await provider.saveClipFromRecording(startSeconds: 0, endSeconds: 1);
+      });
+
+      expect(provider.clipSaved, isFalse);
+      verify(clipSaver.saveClipFromRecording(any, any, any, any, any));
+      verify(recording.lockBusy()).called(1);
+      verify(recording.unlockBusy()).called(1);
+
+      expect(debugOutput, contains(contains('Clip save failed')));
     });
   });
 
@@ -188,11 +219,47 @@ void main() {
       // Must await the async function so lockBusy, clip save, and unlockBusy complete.
       await provider.saveClipFromLive(clipDurationSeconds: 5, secondsPre: 2);
 
+      expect(provider.clipSaved, isTrue);
       verify(recording.lockBusy()).called(1);
       verify(clipSaver.saveClipFromLive(any, any, recording, analytics, settings)).called(1);
       verify(recording.unlockBusy()).called(1);
 
       expect(notifyCount, 1);
+    });
+
+    test('prints to debug when saving fails', () async {
+      when(recording.isRecording).thenReturn(true);
+      when(recording.isBusy).thenReturn(false);
+
+      final cameraController = MockCameraController();
+      final cameraValue = MockCameraValue();
+      when(cameraValue.isInitialized).thenReturn(true);
+      when(cameraController.value).thenReturn(cameraValue);
+      when(recording.controller).thenReturn(cameraController);
+
+      when(clipSaver.saveClipFromLive(any, any, any, any, any)).thenThrow(Error());
+
+      // Capture debugPrint output by intercepting print calls in a Zone.
+      final debugOutput = <String>[];
+      await Zone.current.fork(
+        specification: ZoneSpecification(
+          print: (self, parent, zone, line) {
+            debugOutput.add(line);
+            parent.print(zone, line);
+          },
+        ),
+      ).run(() async {
+        // Must await the async function so lockBusy, clip save, and unlockBusy complete.
+        await provider.saveClipFromLive(clipDurationSeconds: 5, secondsPre: 2);
+      });
+
+      expect(provider.clipSaved, isFalse);
+      verify(recording.lockBusy()).called(1);
+      verify(clipSaver.saveClipFromLive(any, any, recording, analytics, settings)).called(1);
+      verify(recording.unlockBusy()).called(1);
+
+      // Verify that a debug message containing 'Clip save failed' was printed.
+      expect(debugOutput, contains(contains('Clip save failed')));
     });
   });
 }
