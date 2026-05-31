@@ -28,7 +28,6 @@ void main() {
 
   group('SensorProvider', () {
     test('listens to recording state changes', () {
-      final analyticsController = MockAnalyticsController();
       final settingsProvider = MockSettingsProvider();
       final recordingProvider = MockRecordingProvider();
       final clipProvider = MockClipProvider();
