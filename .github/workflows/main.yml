@@ -47,6 +47,9 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Generate mock classes for tests
+        run: dart run build_runner build --delete-conflicting-outputs
+
       # Run static analysis first so lint or type issues fail fast before tests/builds run.
       - name: Analyze Flutter code
         run: flutter analyze --no-fatal-infos
