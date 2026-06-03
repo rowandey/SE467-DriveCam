@@ -18,6 +18,10 @@ that can also support iOS.
 
 ---
 
+To build the project yourself, see [Getting Started](#getting-started)
+
+---
+
 ## Purpose
 
 Existing dash cameras require purchasing and mounting dedicated hardware (expensive, time-consuming
@@ -116,21 +120,37 @@ flutter build apk
 
 - [Flutter SDK](https://docs.flutter.dev/get-started/install) (Dart SDK `^3.10.4`)
 - Android Studio or VS Code with Flutter/Dart extensions
-- A physical Android device (camera access is required — emulators have limited camera support)
 
 ### Setup
 
+To clone and set up the flutter project:
+
 ```bash
 # 1. Clone the repository
-git clone https://github.com/rowandey/CS466-DriveCam.git
-cd CS466-DriveCam/drivecam
+git clone https://github.com/rowandey/SE467-DriveCam.git
+cd SE467-DriveCam/drivecam
 
 # 2. Install dependencies
 flutter pub get
 
-# 3. Run the app on a connected device
+# 3. Generate test files
+dart run build_runner build --delete-conflicting-outputs
+```
+
+### Building
+
+To build and run the project in debug mode:
+
+```bash
 flutter run
 ```
+
+Or to build an APK:
+
+```bash
+flutter build apk --release
+```
+
 
 ### Common Commands
 
